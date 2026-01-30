@@ -1,0 +1,8 @@
+# List of source files containing translatable strings.
+# Please keep this file sorted alphabetically.
+data/io.github.nico359.expenses.desktop.in
+data/io.github.nico359.expenses.metainfo.xml.in
+data/io.github.nico359.expenses.gschema.xml
+src/main.py
+src/window.py
+src/window.ui
