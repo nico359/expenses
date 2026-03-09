@@ -150,6 +150,22 @@
               </object>
             </child>
 
+            <!-- Search -->
+            <child>
+              <object class="AdwClamp">
+                <property name="maximum-size">600</property>
+                <property name="child">
+                  <object class="GtkSearchEntry" id="search_entry">
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">6</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="placeholder-text" translatable="yes">Search payee...</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+
             <!-- Expense List -->
             <child>
               <object class="GtkScrolledWindow">
@@ -180,6 +196,20 @@
     </property>
   </template>
   <menu id="primary_menu">
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Import from Android App</attribute>
+        <attribute name="action">win.import-db</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Export to JSON</attribute>
+        <attribute name="action">win.export-json</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Import from JSON</attribute>
+        <attribute name="action">win.import-json</attribute>
+      </item>
+    </section>
     <section>
       <item>
         <attribute name="label" translatable="yes">_Preferences</attribute>
