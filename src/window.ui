@@ -92,6 +92,17 @@
                             <property name="title" translatable="yes">Payee</property>
                           </object>
                         </child>
+                        <child>
+                          <object class="AdwEntryRow" id="note_entry">
+                            <property name="title" translatable="yes">Note</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="income_switch">
+                            <property name="title" translatable="yes">Income</property>
+                            <property name="subtitle" translatable="yes">Toggle for income transactions</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
 

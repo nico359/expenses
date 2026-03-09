@@ -53,9 +53,9 @@ class ExpensesApplication(Adw.Application):
         """Callback for the app.about action."""
         about = Adw.AboutDialog(application_name='expenses',
                                 application_icon='io.github.nico359.expenses',
-                                developer_name='Unknown',
-                                version='0.1.0',
-                                developers=['Unknown'],
+                                developer_name='nico359',
+                                version='1.1',
+                                developers=['nico359', 'Copilot CLI'],
                                 copyright='© 2026 Unknown')
         # Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
         about.set_translator_credits(_('translator-credits'))

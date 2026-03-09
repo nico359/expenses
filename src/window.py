@@ -29,6 +29,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     amount_entry = Gtk.Template.Child()
     payee_entry = Gtk.Template.Child()
+    note_entry = Gtk.Template.Child()
+    income_switch = Gtk.Template.Child()
     add_button = Gtk.Template.Child()
     expense_list = Gtk.Template.Child()
     total_label = Gtk.Template.Child()
@@ -232,6 +234,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
         """Handle adding a new expense"""
         amount_text = self.amount_entry.get_text().strip()
         payee_text = self.payee_entry.get_text().strip()
+        note_text = self.note_entry.get_text().strip()
+        is_income = self.income_switch.get_active()
 
         if not amount_text or not payee_text:
             return
@@ -239,13 +243,17 @@ class ExpensesWindow(Adw.ApplicationWindow):
         try:
             # Parse amount (accept both comma and dot as decimal separator)
             amount = float(amount_text.replace(',', '.'))
+            # For expenses, make amount negative; for income, keep positive
+            if not is_income:
+                amount = -amount
 
             # Create expense entry
             expense = {
                 'amount': amount,
                 'payee': payee_text,
-                'note': '',
-                'date': datetime.now().strftime('%Y-%m-%d %H:%M')
+                'note': note_text,
+                'date': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                'is_income': is_income
             }
 
             # Add to current account
@@ -265,6 +273,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
             # Clear inputs
             self.amount_entry.set_text('')
             self.payee_entry.set_text('')
+            self.note_entry.set_text('')
+            self.income_switch.set_active(False)
             self.amount_entry.grab_focus()
 
         except ValueError:
@@ -314,11 +324,25 @@ class ExpensesWindow(Adw.ApplicationWindow):
         
         row.set_subtitle(subtitle)
 
-        # Amount label
+        # Amount label - show absolute value with appropriate sign
+        amount = expense['amount']
+        is_income = expense.get('is_income', False)
+        
+        # Format the amount - for expenses show as negative, for income show as positive
+        if is_income:
+            amount_text = f"+{abs(amount):.2f} €"
+        else:
+            amount_text = f"-{abs(amount):.2f} €"
+        
         amount_label = Gtk.Label()
-        amount_label.set_text(f"{expense['amount']:.2f} €")
+        amount_label.set_text(amount_text)
         amount_label.add_css_class('title-3')
-        amount_label.add_css_class('accent')
+        
+        # Color code: green for income, red for expenses
+        if is_income:
+            amount_label.add_css_class('success')
+        else:
+            amount_label.add_css_class('error')
 
         # Delete button
         delete_button = Gtk.Button()
@@ -417,17 +441,20 @@ class ExpensesWindow(Adw.ApplicationWindow):
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
             
-            # Fetch all accounts
+            # Fetch all accounts with opening balance
             cursor.execute("""
-                SELECT _id, label FROM accounts
+                SELECT _id, label, opening_balance FROM accounts
                 ORDER BY sort_key ASC
             """)
             accounts = {}
             account_list = []
+            opening_balances = {}
             
-            for account_id, account_label in cursor.fetchall():
-                account_list.append(account_label.strip())
-                accounts[account_id] = account_label.strip()
+            for account_id, account_label, opening_balance_cents in cursor.fetchall():
+                account_name = account_label.strip()
+                account_list.append(account_name)
+                accounts[account_id] = account_name
+                opening_balances[account_id] = opening_balance_cents if opening_balance_cents else 0
             
             # Start with imported accounts or default if none
             if not account_list:
@@ -444,12 +471,28 @@ class ExpensesWindow(Adw.ApplicationWindow):
             
             expenses_data = {account: [] for account in account_list}
             
+            # Add opening balance as initial transaction for each account
+            for account_id, account_name in accounts.items():
+                opening_balance_cents = opening_balances[account_id]
+                if opening_balance_cents > 0:
+                    opening_balance_euros = opening_balance_cents / 100.0
+                    opening_expense = {
+                        'amount': opening_balance_euros,
+                        'payee': 'Opening Balance',
+                        'note': 'Initial balance imported from database',
+                        'date': '0000-01-01 00:00',
+                        'is_opening_balance': True,
+                        'is_income': True
+                    }
+                    expenses_data[account_name].insert(0, opening_expense)
+            
             for account_id, amount_cents, timestamp, comment, payee_name in cursor.fetchall():
                 # Get account name
                 account_name = accounts.get(account_id, 'Default')
                 
                 # Convert amount from cents to euros
                 amount_euros = amount_cents / 100.0
+                is_income = amount_euros > 0
                 
                 # Convert timestamp (unix epoch in seconds) to ISO format
                 try:
@@ -468,7 +511,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
                     'amount': amount_euros,
                     'payee': payee,
                     'note': comment.strip() if comment else '',
-                    'date': date_str
+                    'date': date_str,
+                    'is_income': is_income
                 }
                 
                 if account_name not in expenses_data:
