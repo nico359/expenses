@@ -1,5 +1,5 @@
 [Desktop Entry]
-Name=expenses
+Name=Expenses
 Exec=expenses
 Icon=io.github.nico359.expenses
 Terminal=false
