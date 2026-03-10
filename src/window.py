@@ -45,13 +45,17 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.data = {
             'accounts': ['Default'],
             'current_account': 'Default',
-            'expenses': {}  # {account_name: [expenses]}
+            'expenses': {},  # {account_name: [expenses]}
+            'recurring_expenses': []  # List of recurring expense definitions
         }
         self.data_file = os.path.join(GLib.get_user_data_dir(), 'expenses.json')
         self.search_query = ''  # Track current search query
 
         # Load existing data
         self.load_data()
+        
+        # Process recurring expenses on startup
+        self.process_recurring_expenses()
 
         # Setup autocomplete
         self.setup_payee_autocomplete()
@@ -244,6 +248,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
                         # Convert old format if exists
                         if isinstance(loaded_data, list):
                             self.data['expenses']['Default'] = loaded_data
+                    if 'recurring_expenses' in loaded_data:
+                        self.data['recurring_expenses'] = loaded_data['recurring_expenses']
             except:
                 pass
 
@@ -255,6 +261,10 @@ class ExpensesWindow(Adw.ApplicationWindow):
         for account in self.data['accounts']:
             if account not in self.data['expenses']:
                 self.data['expenses'][account] = []
+        
+        # Ensure recurring_expenses list exists
+        if 'recurring_expenses' not in self.data:
+            self.data['recurring_expenses'] = []
 
     def save_data(self):
         """Save data to JSON file"""
@@ -264,6 +274,110 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 json.dump(self.data, f, indent=2)
         except Exception as e:
             print(f"Error saving data: {e}")
+
+    def process_recurring_expenses(self):
+        """Check and generate missing recurring expenses on startup"""
+        from datetime import timedelta
+        
+        for recurring in self.data.get('recurring_expenses', []):
+            # Skip if no account specified
+            if 'account' not in recurring:
+                continue
+                
+            account = recurring['account']
+            if account not in self.data['expenses']:
+                continue
+            
+            # Get the start and last generated dates
+            start_date = datetime.fromisoformat(recurring.get('start_date', datetime.now().isoformat()))
+            last_generated = None
+            if recurring.get('last_generated'):
+                try:
+                    last_generated = datetime.fromisoformat(recurring['last_generated'])
+                except:
+                    last_generated = start_date
+            else:
+                last_generated = start_date
+            
+            # Get frequency
+            frequency = recurring.get('frequency', 'monthly')
+            
+            # Calculate next generation date
+            current_date = datetime.now()
+            next_date = last_generated
+            
+            # Generate missing entries
+            while next_date <= current_date:
+                # Check end date
+                if recurring.get('end_date'):
+                    try:
+                        # Try parsing as ISO datetime first, then as date
+                        try:
+                            end_date = datetime.fromisoformat(recurring['end_date'])
+                        except:
+                            end_date = datetime.fromisoformat(recurring['end_date'] + 'T23:59:59')
+                        if next_date.date() > end_date.date():
+                            break
+                    except:
+                        pass
+                
+                # Skip if entry already exists on this date
+                if not self._expense_exists_on_date(account, next_date, recurring):
+                    # Create the expense entry
+                    expense = {
+                        'amount': recurring['amount'],
+                        'payee': recurring['payee'],
+                        'note': recurring.get('note', ''),
+                        'date': next_date.strftime('%Y-%m-%d %H:%M'),
+                        'is_income': recurring.get('is_income', False),
+                        'recurring_id': recurring.get('id')
+                    }
+                    self.data['expenses'][account].append(expense)
+                
+                # Calculate next date based on frequency
+                next_date = self._add_frequency(next_date, frequency)
+            
+            # Update last_generated timestamp
+            recurring['last_generated'] = current_date.isoformat()
+        
+        # Save if we generated any new expenses
+        if self.data.get('recurring_expenses'):
+            self.save_data()
+
+    def _expense_exists_on_date(self, account, target_date, recurring):
+        """Check if an expense from a recurring definition already exists on a given date"""
+        target_date_str = target_date.strftime('%Y-%m-%d')
+        for expense in self.data['expenses'].get(account, []):
+            expense_date_str = expense['date'].split()[0]
+            if expense_date_str == target_date_str and \
+               expense['payee'] == recurring['payee'] and \
+               expense['amount'] == recurring['amount']:
+                return True
+        return False
+
+    def _add_frequency(self, date_obj, frequency):
+        """Add frequency duration to a date"""
+        from datetime import timedelta
+        
+        if frequency == 'daily':
+            return date_obj + timedelta(days=1)
+        elif frequency == 'weekly':
+            return date_obj + timedelta(weeks=1)
+        elif frequency == 'monthly':
+            # Add one month
+            if date_obj.month == 12:
+                return date_obj.replace(year=date_obj.year + 1, month=1)
+            else:
+                return date_obj.replace(month=date_obj.month + 1)
+        elif frequency == 'yearly':
+            return date_obj.replace(year=date_obj.year + 1)
+        else:
+            # Try to parse as custom interval (number of days)
+            try:
+                days = int(frequency)
+                return date_obj + timedelta(days=days)
+            except:
+                return date_obj + timedelta(days=1)  # Default to daily
 
     def get_current_expenses(self):
         """Get expenses for current account"""
@@ -353,7 +467,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
         """Create a list row for an expense"""
         row = Adw.ActionRow()
         # Escape ampersands for safe display in GTK labels
-        # This prevents GTK from trying to interpret & as entity markers
         payee_text = expense['payee'].replace('&', '&amp;')
         row.set_title(payee_text)
         
@@ -363,6 +476,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
             subtitle = f"{note} • {expense['date']}"
         else:
             subtitle = expense['date']
+        
+        # Check if this expense is recurring
+        recurring_id = expense.get('recurring_id')
+        if recurring_id:
+            subtitle = f"🔁 {subtitle}"
         
         row.set_subtitle(subtitle)
 
@@ -386,6 +504,16 @@ class ExpensesWindow(Adw.ApplicationWindow):
         else:
             amount_label.add_css_class('error')
 
+        # Make recurring button (if not already recurring)
+        if not recurring_id:
+            recurring_button = Gtk.Button()
+            recurring_button.set_icon_name('media-repeat-symbolic')
+            recurring_button.set_valign(Gtk.Align.CENTER)
+            recurring_button.add_css_class('flat')
+            recurring_button.set_tooltip_text('Make recurring')
+            recurring_button.connect('clicked', self.on_make_recurring, index)
+            row.add_suffix(recurring_button)
+
         # Delete button
         delete_button = Gtk.Button()
         delete_button.set_icon_name('user-trash-symbolic')
@@ -408,6 +536,87 @@ class ExpensesWindow(Adw.ApplicationWindow):
             self.update_expense_list()
             self.update_total()
             self.update_payee_suggestions()
+
+    def on_make_recurring(self, button, index):
+        """Show dialog to make an expense recurring"""
+        expenses = self.get_current_expenses()
+        if not (0 <= index < len(expenses)):
+            return
+        
+        expense = expenses[index]
+        
+        # Create a dialog for recurring setup
+        dialog = Adw.MessageDialog.new(self)
+        dialog.set_heading("Make Recurring")
+        dialog.set_body(f"Set up recurring for {expense['payee']}?")
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("ok", "Create")
+        dialog.set_default_response("ok")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
+        
+        # Create frequency selector using ComboBoxText
+        frequency_combo = Gtk.ComboBoxText()
+        for freq in ['Daily', 'Weekly', 'Monthly', 'Yearly']:
+            frequency_combo.append_text(freq)
+        frequency_combo.set_active(2)  # Default to Monthly
+        
+        # Create end date entry
+        end_date_entry = Gtk.Entry()
+        end_date_entry.set_placeholder_text("YYYY-MM-DD (optional)")
+        
+        # Create a box for inputs
+        input_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        input_box.set_spacing(12)
+        input_box.set_margin_top(12)
+        input_box.append(Gtk.Label(label="Frequency:", xalign=0))
+        input_box.append(frequency_combo)
+        input_box.append(Gtk.Label(label="End Date (optional):", xalign=0))
+        input_box.append(end_date_entry)
+        
+        dialog.set_extra_child(input_box)
+        
+        def on_response(dialog, response):
+            if response == "ok":
+                # Get selected frequency
+                frequency_index = frequency_combo.get_active()
+                frequencies = ['daily', 'weekly', 'monthly', 'yearly']
+                frequency = frequencies[frequency_index] if frequency_index >= 0 else 'monthly'
+                
+                # Get end date
+                end_date = end_date_entry.get_text().strip()
+                
+                # Create recurring definition
+                import uuid
+                recurring = {
+                    'id': str(uuid.uuid4()),
+                    'amount': expense['amount'],
+                    'payee': expense['payee'],
+                    'note': expense.get('note', ''),
+                    'is_income': expense.get('is_income', False),
+                    'frequency': frequency,
+                    'start_date': expense['date'],
+                    'end_date': end_date if end_date else None,
+                    'last_generated': expense['date'],
+                    'account': self.data['current_account']
+                }
+                
+                self.data['recurring_expenses'].append(recurring)
+                
+                # Mark the original expense
+                expense['recurring_id'] = recurring['id']
+                
+                self.save_data()
+                self.update_expense_list()
+                
+                # Show confirmation
+                confirm_dialog = Adw.MessageDialog.new(self)
+                confirm_dialog.set_heading("Recurring Created")
+                confirm_dialog.set_body(f"✓ {expense['payee']} is now recurring ({frequency.capitalize()})")
+                confirm_dialog.add_response("ok", "OK")
+                confirm_dialog.present()
+        
+        dialog.connect('response', on_response)
+        dialog.present()
 
     def update_total(self):
         """Update the total amount display"""
