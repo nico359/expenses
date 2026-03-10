@@ -86,26 +86,30 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def setup_payee_autocomplete(self):
         """Setup autocomplete for payee entry"""
-        # Create completion
-        completion = Gtk.EntryCompletion()
-
-        # Create list store for payees
-        self.payee_store = Gtk.ListStore(str)
-        completion.set_model(self.payee_store)
-        completion.set_text_column(0)
-        completion.set_minimum_key_length(1)
-        completion.set_inline_completion(True)
-        completion.set_popup_completion(True)
-
-        # Get the internal GtkText widget from AdwEntryRow
-        # This is a bit of a workaround for Adwaita entry rows
-        self.payee_text_widget = None
-        for child in self.payee_entry:
-            if isinstance(child, Gtk.Text):
-                self.payee_text_widget = child
-                self.payee_text_widget.set_completion(completion)
-                break
-
+        # Create a scrollable list for suggestions
+        suggestion_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        scrollable = Gtk.ScrolledWindow()
+        scrollable.set_max_content_height(250)
+        scrollable.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        
+        self.payee_list = Gtk.ListBox()
+        self.payee_list.set_selection_mode(Gtk.SelectionMode.SINGLE)
+        self.payee_list.connect('row-activated', self.on_payee_selected)
+        
+        scrollable.set_child(self.payee_list)
+        suggestion_box.append(scrollable)
+        
+        # Create a popover with suggestions
+        self.payee_popover = Gtk.Popover()
+        self.payee_popover.set_child(suggestion_box)
+        self.payee_popover.set_position(Gtk.PositionType.BOTTOM)
+        self.payee_popover.set_has_arrow(False)
+        
+        # Store all unique payees for filtering
+        self.all_payees = []
+        
+        # Connect to payee entry changes
+        self.payee_entry.connect('notify::text', self.on_payee_changed)
         self.update_payee_suggestions()
 
     def update_payee_suggestions(self):
@@ -117,12 +121,50 @@ class ExpensesWindow(Adw.ApplicationWindow):
             for expense in account_expenses:
                 payees.add(expense['payee'])
 
-        # Update the store
-        self.payee_store.clear()
-        for payee in sorted(payees):
-            # Escape ampersands for safe display
-            escaped_payee = payee.replace('&', '&amp;')
-            self.payee_store.append([escaped_payee])
+        # Store all payees
+        self.all_payees = sorted(payees)
+
+    def on_payee_changed(self, entry, param):
+        """Handle payee entry text changes to show suggestions"""
+        text = entry.get_text().strip()
+        
+        # If text is too short, hide popover
+        if len(text) < 1:
+            self.payee_popover.popdown()
+            return
+        
+        # Filter suggestions based on text
+        text_lower = text.lower()
+        matching_payees = [p for p in self.all_payees if text_lower in p.lower()]
+        
+        # Clear and rebuild list
+        while self.payee_list.get_first_child():
+            self.payee_list.remove(self.payee_list.get_first_child())
+        
+        # Add matching suggestions
+        for payee in matching_payees:
+            label = Gtk.Label(label=payee, xalign=0)
+            label.set_margin_start(12)
+            label.set_margin_end(12)
+            label.set_margin_top(8)
+            label.set_margin_bottom(8)
+            row = Gtk.ListBoxRow(child=label)
+            self.payee_list.append(row)
+        
+        # Show popover if there are matches
+        if matching_payees:
+            self.payee_popover.set_parent(entry)
+            self.payee_popover.popup()
+        else:
+            self.payee_popover.popdown()
+
+    def on_payee_selected(self, list_box, row):
+        """Handle payee selection from dropdown"""
+        label = row.get_child()
+        if label:
+            payee_text = label.get_label()
+            self.payee_entry.set_text(payee_text)
+            self.payee_popover.popdown()
 
     def setup_account_dropdown(self):
         """Setup the account dropdown"""
@@ -556,8 +598,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
             action=Gtk.FileChooserAction.SAVE,
         )
         dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_SAVE, Gtk.ResponseType.OK
+            "_Cancel", Gtk.ResponseType.CANCEL,
+            "_Save", Gtk.ResponseType.OK
         )
 
         # Set default filename with timestamp
@@ -610,8 +652,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
             action=Gtk.FileChooserAction.OPEN,
         )
         dialog.add_buttons(
-            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
-            Gtk.STOCK_OPEN, Gtk.ResponseType.OK
+            "_Cancel", Gtk.ResponseType.CANCEL,
+            "_Open", Gtk.ResponseType.OK
         )
 
         # Add JSON filter
