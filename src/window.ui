@@ -10,12 +10,6 @@
       <object class="AdwToolbarView">
         <child type="top">
           <object class="AdwHeaderBar">
-            <child type="start">
-              <object class="GtkButton" id="manage_accounts_button">
-                <property name="icon-name">view-list-symbolic</property>
-                <property name="tooltip-text" translatable="yes">Manage Accounts</property>
-              </object>
-            </child>
             <child type="end">
               <object class="GtkMenuButton">
                 <property name="primary">True</property>

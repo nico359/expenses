@@ -35,7 +35,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
     expense_list = Gtk.Template.Child()
     total_label = Gtk.Template.Child()
     account_dropdown = Gtk.Template.Child()
-    manage_accounts_button = Gtk.Template.Child()
     search_entry = Gtk.Template.Child()
 
     def __init__(self, **kwargs):
@@ -68,7 +67,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.amount_entry.connect('entry-activated', self.on_add_expense)
         self.payee_entry.connect('entry-activated', self.on_add_expense)
         self.account_dropdown.connect('notify::selected', self.on_account_changed)
-        self.manage_accounts_button.connect('clicked', self.on_manage_accounts)
         self.search_entry.connect('search-changed', self.on_search_changed)
 
         # Setup import/export actions
@@ -172,34 +170,67 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def setup_account_dropdown(self):
         """Setup the account dropdown"""
-        # Create string list
+        # Create string list including existing accounts + add new option
         self.account_list = Gtk.StringList()
         for account in self.data['accounts']:
             self.account_list.append(account)
-
+        # Add a special entry for adding new account
+        self.account_list.append("+ New Account")
+        
         self.account_dropdown.set_model(self.account_list)
-
+        
+        # Create custom factory for dropdown items
+        factory = Gtk.SignalListItemFactory()
+        factory.connect('setup', self._setup_account_item)
+        factory.connect('bind', self._bind_account_item)
+        self.account_dropdown.set_factory(factory)
+        
         # Set current account
         try:
             index = self.data['accounts'].index(self.data['current_account'])
             self.account_dropdown.set_selected(index)
         except ValueError:
             self.account_dropdown.set_selected(0)
+        
+        # Connect selection change
+        self.account_dropdown.connect('notify::selected', self.on_account_changed)
+
+    def _setup_account_item(self, factory, item):
+        """Setup account dropdown item"""
+        item.set_child(Gtk.Label())
+
+    def _bind_account_item(self, factory, item):
+        """Bind account dropdown item"""
+        label = item.get_child()
+        obj = item.get_item()
+        if obj:
+            label.set_text(obj.get_string())
 
     def on_account_changed(self, dropdown, param):
         """Handle account selection change"""
         selected = dropdown.get_selected()
         if selected != Gtk.INVALID_LIST_POSITION:
-            self.data['current_account'] = self.data['accounts'][selected]
-            self.save_data()
-            self.update_expense_list()
-            self.update_total()
+            # Check if "Add Account" was selected
+            if selected == len(self.data['accounts']):
+                # Reset to previous selection and show add account dialog
+                try:
+                    prev_index = self.data['accounts'].index(self.data['current_account'])
+                    self.account_dropdown.set_selected(prev_index)
+                except ValueError:
+                    self.account_dropdown.set_selected(0)
+                self.on_add_account()
+            else:
+                # Normal account selection
+                self.data['current_account'] = self.data['accounts'][selected]
+                self.save_data()
+                self.update_expense_list()
+                self.update_total()
 
-    def on_manage_accounts(self, button):
-        """Show account management dialog"""
+    def on_add_account(self):
+        """Show add account dialog"""
         dialog = Adw.MessageDialog.new(self)
-        dialog.set_heading("Manage Accounts")
-        dialog.set_body("Enter a new account name:")
+        dialog.set_heading("New Account")
+        dialog.set_body("Enter account name:")
 
         # Create entry for new account
         entry = Gtk.Entry()
@@ -211,7 +242,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
         dialog.set_extra_child(entry)
         dialog.add_response("cancel", "Cancel")
-        dialog.add_response("add", "Add Account")
+        dialog.add_response("add", "Create")
         dialog.set_response_appearance("add", Adw.ResponseAppearance.SUGGESTED)
 
         dialog.connect('response', self.on_add_account_response, entry)
@@ -224,9 +255,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
             if account_name and account_name not in self.data['accounts']:
                 self.data['accounts'].append(account_name)
                 self.data['expenses'][account_name] = []
-                self.account_list.append(account_name)
                 self.save_data()
-
+                
+                # Rebuild the dropdown with new account
+                self.setup_account_dropdown()
+                
                 # Select the new account
                 index = self.data['accounts'].index(account_name)
                 self.account_dropdown.set_selected(index)
