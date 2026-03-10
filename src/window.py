@@ -35,6 +35,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
     expense_list = Gtk.Template.Child()
     total_label = Gtk.Template.Child()
     account_dropdown = Gtk.Template.Child()
+    account_options_button = Gtk.Template.Child()
     search_entry = Gtk.Template.Child()
 
     def __init__(self, **kwargs):
@@ -67,6 +68,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.amount_entry.connect('entry-activated', self.on_add_expense)
         self.payee_entry.connect('entry-activated', self.on_add_expense)
         self.account_dropdown.connect('notify::selected', self.on_account_changed)
+        self.account_options_button.connect('clicked', self.on_account_options)
         self.search_entry.connect('search-changed', self.on_search_changed)
 
         # Setup import/export actions
@@ -263,6 +265,52 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 # Select the new account
                 index = self.data['accounts'].index(account_name)
                 self.account_dropdown.set_selected(index)
+
+    def on_account_options(self, button):
+        """Show account options menu"""
+        if len(self.data['accounts']) <= 1:
+            # Show message that at least one account must exist
+            dialog = Adw.MessageDialog.new(self)
+            dialog.set_heading("Cannot Delete Account")
+            dialog.set_body("You must have at least one account.")
+            dialog.add_response("ok", "OK")
+            dialog.present()
+            return
+        
+        # Show delete confirmation dialog
+        current_account = self.data['current_account']
+        dialog = Adw.MessageDialog.new(self)
+        dialog.set_heading("Delete Account?")
+        dialog.set_body(f"Are you sure you want to delete the account '{current_account}'? All expenses in this account will be permanently deleted.")
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("delete", "Delete")
+        dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
+        dialog.set_default_response("cancel")
+        
+        dialog.connect('response', self.on_delete_account_response)
+        dialog.present()
+
+    def on_delete_account_response(self, dialog, response):
+        """Handle delete account confirmation"""
+        if response == "delete":
+            account_to_delete = self.data['current_account']
+            
+            # Remove account and its expenses
+            if account_to_delete in self.data['accounts']:
+                self.data['accounts'].remove(account_to_delete)
+            if account_to_delete in self.data['expenses']:
+                del self.data['expenses'][account_to_delete]
+            
+            # Switch to first available account
+            if self.data['accounts']:
+                self.data['current_account'] = self.data['accounts'][0]
+            
+            self.save_data()
+            
+            # Rebuild UI
+            self.setup_account_dropdown()
+            self.update_expense_list()
+            self.update_total()
 
     def load_data(self):
         """Load data from JSON file"""
@@ -537,15 +585,23 @@ class ExpensesWindow(Adw.ApplicationWindow):
         else:
             amount_label.add_css_class('error')
 
-        # Make recurring button (if not already recurring)
-        if not recurring_id:
-            recurring_button = Gtk.Button()
+        # Recurring button - either "Make Recurring" or "Stop Recurring"
+        recurring_button = Gtk.Button()
+        recurring_button.set_valign(Gtk.Align.CENTER)
+        recurring_button.add_css_class('flat')
+        
+        if recurring_id:
+            # Show stop recurring button
             recurring_button.set_icon_name('media-repeat-symbolic')
-            recurring_button.set_valign(Gtk.Align.CENTER)
-            recurring_button.add_css_class('flat')
+            recurring_button.set_tooltip_text('Stop recurring')
+            recurring_button.connect('clicked', self.on_stop_recurring, index)
+        else:
+            # Show make recurring button
+            recurring_button.set_icon_name('media-repeat-symbolic')
             recurring_button.set_tooltip_text('Make recurring')
             recurring_button.connect('clicked', self.on_make_recurring, index)
-            row.add_suffix(recurring_button)
+        
+        row.add_suffix(recurring_button)
 
         # Delete button
         delete_button = Gtk.Button()
@@ -564,11 +620,42 @@ class ExpensesWindow(Adw.ApplicationWindow):
         """Handle deleting an expense"""
         expenses = self.get_current_expenses()
         if 0 <= index < len(expenses):
+            expense = expenses[index]
+            
+            # If this expense is recurring, remove the recurring definition
+            if expense.get('recurring_id'):
+                recurring_id = expense['recurring_id']
+                # Remove from recurring list
+                self.data['recurring_expenses'] = [
+                    r for r in self.data['recurring_expenses'] 
+                    if r.get('id') != recurring_id
+                ]
+            
             expenses.pop(index)
             self.save_data()
             self.update_expense_list()
             self.update_total()
             self.update_payee_suggestions()
+
+    def on_stop_recurring(self, button, index):
+        """Handle stopping a recurring expense"""
+        expenses = self.get_current_expenses()
+        if 0 <= index < len(expenses):
+            expense = expenses[index]
+            if expense.get('recurring_id'):
+                recurring_id = expense['recurring_id']
+                
+                # Remove from recurring definitions
+                self.data['recurring_expenses'] = [
+                    r for r in self.data['recurring_expenses'] 
+                    if r.get('id') != recurring_id
+                ]
+                
+                # Remove recurring_id from this expense
+                expense.pop('recurring_id', None)
+                
+                self.save_data()
+                self.update_expense_list()
 
     def on_make_recurring(self, button, index):
         """Show dialog to make an expense recurring"""

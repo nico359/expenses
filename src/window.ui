@@ -50,8 +50,20 @@
                     </child>
 
                     <child>
-                      <object class="GtkDropDown" id="account_dropdown">
-                        <property name="halign">fill</property>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">6</property>
+                        <child>
+                          <object class="GtkDropDown" id="account_dropdown">
+                            <property name="hexpand">true</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="account_options_button">
+                            <property name="icon-name">user-trash-symbolic</property>
+                            <property name="tooltip-text">Delete account</property>
+                          </object>
+                        </child>
                       </object>
                     </child>
                   </object>
