@@ -561,7 +561,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         # Check if this expense is recurring
         recurring_id = expense.get('recurring_id')
         if recurring_id:
-            subtitle = f"🔁 {subtitle}"
+            subtitle = f"↻ {subtitle}"
         
         row.set_subtitle(subtitle)
 
@@ -591,13 +591,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
         recurring_button.add_css_class('flat')
         
         if recurring_id:
-            # Show stop recurring button
-            recurring_button.set_icon_name('media-repeat-symbolic')
+            recurring_button.set_icon_name('window-close-symbolic')
             recurring_button.set_tooltip_text('Stop recurring')
             recurring_button.connect('clicked', self.on_stop_recurring, index)
         else:
-            # Show make recurring button
-            recurring_button.set_icon_name('media-repeat-symbolic')
+            recurring_button.set_icon_name('view-refresh-symbolic')
             recurring_button.set_tooltip_text('Make recurring')
             recurring_button.connect('clicked', self.on_make_recurring, index)
         
@@ -731,7 +729,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 # Show confirmation
                 confirm_dialog = Adw.MessageDialog.new(self)
                 confirm_dialog.set_heading("Recurring Created")
-                confirm_dialog.set_body(f"✓ {expense['payee']} is now recurring ({frequency.capitalize()})")
+                confirm_dialog.set_body(f"{expense['payee']} is now recurring ({frequency.capitalize()})")
                 confirm_dialog.add_response("ok", "OK")
                 confirm_dialog.present()
         
