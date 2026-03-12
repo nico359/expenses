@@ -87,7 +87,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def setup_payee_autocomplete(self):
         """Setup autocomplete for payee entry"""
-        # Create a scrollable list for suggestions
         suggestion_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         scrollable = Gtk.ScrolledWindow()
         scrollable.set_max_content_height(250)
@@ -100,17 +99,26 @@ class ExpensesWindow(Adw.ApplicationWindow):
         scrollable.set_child(self.payee_list)
         suggestion_box.append(scrollable)
         
-        # Create a popover with suggestions
+        # Create a popover with suggestions — autohide off so it
+        # never steals keyboard focus from the entry.
         self.payee_popover = Gtk.Popover()
         self.payee_popover.set_child(suggestion_box)
         self.payee_popover.set_position(Gtk.PositionType.BOTTOM)
         self.payee_popover.set_has_arrow(False)
+        self.payee_popover.set_autohide(False)
+        self.payee_popover.set_parent(self.payee_entry)
         
         # Store all unique payees for filtering
         self.all_payees = []
         
-        # Connect to payee entry changes
+        # Connect to payee entry changes and focus
         self.payee_entry.connect('notify::text', self.on_payee_changed)
+
+        # Hide suggestions when the entry loses focus
+        focus_controller = Gtk.EventControllerFocus()
+        focus_controller.connect('leave', lambda _ctrl: self.payee_popover.popdown())
+        self.payee_entry.add_controller(focus_controller)
+
         self.update_payee_suggestions()
 
     def update_payee_suggestions(self):
@@ -121,7 +129,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
         """Handle payee entry text changes to show suggestions"""
         text = entry.get_text().strip()
         
-        # If text is too short, hide popover
         if len(text) < 1:
             self.payee_popover.popdown()
             return
@@ -134,7 +141,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
         while self.payee_list.get_first_child():
             self.payee_list.remove(self.payee_list.get_first_child())
         
-        # Add matching suggestions
         for payee in matching_payees:
             label = Gtk.Label(label=payee, xalign=0)
             label.set_margin_start(12)
@@ -144,9 +150,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
             row = Gtk.ListBoxRow(child=label)
             self.payee_list.append(row)
         
-        # Show popover if there are matches
         if matching_payees:
-            self.payee_popover.set_parent(entry)
             self.payee_popover.popup()
         else:
             self.payee_popover.popdown()
