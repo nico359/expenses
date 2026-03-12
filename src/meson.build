@@ -29,6 +29,7 @@ configure_file(
 expenses_sources = [
   '__init__.py',
   'main.py',
+  'db.py',
   'window.py',
 ]
 

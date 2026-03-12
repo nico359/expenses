@@ -23,6 +23,8 @@ import os
 import sqlite3
 from datetime import datetime
 
+from .db import Database
+
 @Gtk.Template(resource_path='/io/github/nico359/expenses/window.ui')
 class ExpensesWindow(Adw.ApplicationWindow):
     __gtype_name__ = 'ExpensesWindow'
@@ -41,18 +43,25 @@ class ExpensesWindow(Adw.ApplicationWindow):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        # Data storage
-        self.data = {
-            'accounts': ['Default'],
-            'current_account': 'Default',
-            'expenses': {},  # {account_name: [expenses]}
-            'recurring_expenses': []  # List of recurring expense definitions
-        }
-        self.data_file = os.path.join(GLib.get_user_data_dir(), 'expenses.json')
-        self.search_query = ''  # Track current search query
+        # Initialize SQLite database
+        db_path = os.path.join(GLib.get_user_data_dir(), 'expenses.db')
+        json_path = os.path.join(GLib.get_user_data_dir(), 'expenses.json')
+        self.db = Database(db_path)
 
-        # Load existing data
-        self.load_data()
+        # One-time migration from the old JSON file
+        if not self.db.get_accounts():
+            self.db.migrate_from_json(json_path)
+
+        # Ensure at least one account exists
+        if not self.db.get_accounts():
+            self.db.add_account('Default')
+            self.db.set_setting('current_account', 'Default')
+
+        self.current_account = self.db.get_setting(
+            'current_account',
+            self.db.get_accounts()[0]
+        )
+        self.search_query = ''
         
         # Process recurring expenses on startup
         self.process_recurring_expenses()
@@ -118,15 +127,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def update_payee_suggestions(self):
         """Update autocomplete suggestions based on existing payees"""
-        payees = set()
-
-        # Collect all unique payees from all accounts
-        for account_expenses in self.data['expenses'].values():
-            for expense in account_expenses:
-                payees.add(expense['payee'])
-
-        # Store all payees
-        self.all_payees = sorted(payees)
+        self.all_payees = self.db.get_all_payees()
 
     def on_payee_changed(self, entry, param):
         """Handle payee entry text changes to show suggestions"""
@@ -172,9 +173,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def setup_account_dropdown(self):
         """Setup the account dropdown"""
+        accounts = self.db.get_accounts()
+
         # Create string list including existing accounts + add new option
         self.account_list = Gtk.StringList()
-        for account in self.data['accounts']:
+        for account in accounts:
             self.account_list.append(account)
         # Add a special entry for adding new account
         self.account_list.append("+ New Account")
@@ -189,7 +192,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         
         # Set current account
         try:
-            index = self.data['accounts'].index(self.data['current_account'])
+            index = accounts.index(self.current_account)
             self.account_dropdown.set_selected(index)
         except ValueError:
             self.account_dropdown.set_selected(0)
@@ -211,20 +214,21 @@ class ExpensesWindow(Adw.ApplicationWindow):
     def on_account_changed(self, dropdown, param):
         """Handle account selection change"""
         selected = dropdown.get_selected()
+        accounts = self.db.get_accounts()
         if selected != Gtk.INVALID_LIST_POSITION:
             # Check if "Add Account" was selected
-            if selected == len(self.data['accounts']):
+            if selected == len(accounts):
                 # Reset to previous selection and show add account dialog
                 try:
-                    prev_index = self.data['accounts'].index(self.data['current_account'])
+                    prev_index = accounts.index(self.current_account)
                     self.account_dropdown.set_selected(prev_index)
                 except ValueError:
                     self.account_dropdown.set_selected(0)
                 self.on_add_account()
             else:
                 # Normal account selection
-                self.data['current_account'] = self.data['accounts'][selected]
-                self.save_data()
+                self.current_account = accounts[selected]
+                self.db.set_setting('current_account', self.current_account)
                 self.update_expense_list()
                 self.update_total()
 
@@ -254,21 +258,19 @@ class ExpensesWindow(Adw.ApplicationWindow):
         """Handle add account dialog response"""
         if response == "add":
             account_name = entry.get_text().strip()
-            if account_name and account_name not in self.data['accounts']:
-                self.data['accounts'].append(account_name)
-                self.data['expenses'][account_name] = []
-                self.save_data()
+            if account_name and account_name not in self.db.get_accounts():
+                self.db.add_account(account_name)
                 
                 # Rebuild the dropdown with new account
                 self.setup_account_dropdown()
                 
                 # Select the new account
-                index = self.data['accounts'].index(account_name)
+                index = self.db.get_accounts().index(account_name)
                 self.account_dropdown.set_selected(index)
 
     def on_account_options(self, button):
         """Show account options menu"""
-        if len(self.data['accounts']) <= 1:
+        if len(self.db.get_accounts()) <= 1:
             # Show message that at least one account must exist
             dialog = Adw.MessageDialog.new(self)
             dialog.set_heading("Cannot Delete Account")
@@ -278,10 +280,9 @@ class ExpensesWindow(Adw.ApplicationWindow):
             return
         
         # Show delete confirmation dialog
-        current_account = self.data['current_account']
         dialog = Adw.MessageDialog.new(self)
         dialog.set_heading("Delete Account?")
-        dialog.set_body(f"Are you sure you want to delete the account '{current_account}'? All expenses in this account will be permanently deleted.")
+        dialog.set_body(f"Are you sure you want to delete the account '{self.current_account}'? All expenses in this account will be permanently deleted.")
         dialog.add_response("cancel", "Cancel")
         dialog.add_response("delete", "Delete")
         dialog.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
@@ -293,80 +294,30 @@ class ExpensesWindow(Adw.ApplicationWindow):
     def on_delete_account_response(self, dialog, response):
         """Handle delete account confirmation"""
         if response == "delete":
-            account_to_delete = self.data['current_account']
-            
-            # Remove account and its expenses
-            if account_to_delete in self.data['accounts']:
-                self.data['accounts'].remove(account_to_delete)
-            if account_to_delete in self.data['expenses']:
-                del self.data['expenses'][account_to_delete]
+            self.db.delete_account(self.current_account)
             
             # Switch to first available account
-            if self.data['accounts']:
-                self.data['current_account'] = self.data['accounts'][0]
-            
-            self.save_data()
+            accounts = self.db.get_accounts()
+            if accounts:
+                self.current_account = accounts[0]
+                self.db.set_setting('current_account', self.current_account)
             
             # Rebuild UI
             self.setup_account_dropdown()
             self.update_expense_list()
             self.update_total()
 
-    def load_data(self):
-        """Load data from JSON file"""
-        if os.path.exists(self.data_file):
-            try:
-                with open(self.data_file, 'r') as f:
-                    loaded_data = json.load(f)
-                    # Merge with defaults
-                    if 'accounts' in loaded_data:
-                        self.data['accounts'] = loaded_data['accounts']
-                    if 'current_account' in loaded_data:
-                        self.data['current_account'] = loaded_data['current_account']
-                    if 'expenses' in loaded_data:
-                        self.data['expenses'] = loaded_data['expenses']
-                    else:
-                        # Convert old format if exists
-                        if isinstance(loaded_data, list):
-                            self.data['expenses']['Default'] = loaded_data
-                    if 'recurring_expenses' in loaded_data:
-                        self.data['recurring_expenses'] = loaded_data['recurring_expenses']
-            except:
-                pass
-
-        # Ensure current account exists in accounts list
-        if self.data['current_account'] not in self.data['accounts']:
-            self.data['current_account'] = self.data['accounts'][0]
-
-        # Ensure all accounts have expense lists
-        for account in self.data['accounts']:
-            if account not in self.data['expenses']:
-                self.data['expenses'][account] = []
-        
-        # Ensure recurring_expenses list exists
-        if 'recurring_expenses' not in self.data:
-            self.data['recurring_expenses'] = []
-
-    def save_data(self):
-        """Save data to JSON file"""
-        try:
-            os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
-            with open(self.data_file, 'w') as f:
-                json.dump(self.data, f, indent=2)
-        except Exception as e:
-            print(f"Error saving data: {e}")
+    def get_current_expenses(self):
+        """Get expenses for current account from the database."""
+        return self.db.get_expenses(self.current_account)
 
     def process_recurring_expenses(self):
         """Check and generate missing recurring expenses on startup"""
         from datetime import timedelta
         
-        for recurring in self.data.get('recurring_expenses', []):
-            # Skip if no account specified
-            if 'account' not in recurring:
-                continue
-                
-            account = recurring['account']
-            if account not in self.data['expenses']:
+        for recurring in self.db.get_recurring_expenses():
+            account = recurring.get('account')
+            if not account:
                 continue
             
             # Get the start and last generated dates
@@ -392,7 +343,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 # Check end date
                 if recurring.get('end_date'):
                     try:
-                        # Try parsing as ISO datetime first, then as date
                         try:
                             end_date = datetime.fromisoformat(recurring['end_date'])
                         except:
@@ -402,9 +352,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
                     except:
                         pass
                 
-                # Skip if entry already exists on this date
-                if not self._expense_exists_on_date(account, next_date, recurring):
-                    # Create the expense entry
+                target_date_str = next_date.strftime('%Y-%m-%d')
+                if not self.db.expense_exists_on_date(
+                    account, target_date_str,
+                    recurring['payee'], recurring['amount']
+                ):
                     expense = {
                         'amount': recurring['amount'],
                         'payee': recurring['payee'],
@@ -413,28 +365,15 @@ class ExpensesWindow(Adw.ApplicationWindow):
                         'is_income': recurring.get('is_income', False),
                         'recurring_id': recurring.get('id')
                     }
-                    self.data['expenses'][account].append(expense)
+                    self.db.add_expense(account, expense)
                 
                 # Calculate next date based on frequency
                 next_date = self._add_frequency(next_date, frequency)
             
             # Update last_generated timestamp
-            recurring['last_generated'] = current_date.isoformat()
-        
-        # Save if we generated any new expenses
-        if self.data.get('recurring_expenses'):
-            self.save_data()
-
-    def _expense_exists_on_date(self, account, target_date, recurring):
-        """Check if an expense from a recurring definition already exists on a given date"""
-        target_date_str = target_date.strftime('%Y-%m-%d')
-        for expense in self.data['expenses'].get(account, []):
-            expense_date_str = expense['date'].split()[0]
-            if expense_date_str == target_date_str and \
-               expense['payee'] == recurring['payee'] and \
-               expense['amount'] == recurring['amount']:
-                return True
-        return False
+            self.db.update_recurring(
+                recurring['id'], last_generated=current_date.isoformat()
+            )
 
     def _add_frequency(self, date_obj, frequency):
         """Add frequency duration to a date"""
@@ -459,13 +398,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 return date_obj + timedelta(days=days)
             except:
                 return date_obj + timedelta(days=1)  # Default to daily
-
-    def get_current_expenses(self):
-        """Get expenses for current account"""
-        account = self.data['current_account']
-        if account not in self.data['expenses']:
-            self.data['expenses'][account] = []
-        return self.data['expenses'][account]
 
     def on_add_expense(self, widget):
         """Handle adding a new expense"""
@@ -493,12 +425,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 'is_income': is_income
             }
 
-            # Add to current account
-            expenses = self.get_current_expenses()
-            expenses.append(expense)
-
-            # Save to file
-            self.save_data()
+            # Save to database
+            self.db.add_expense(self.current_account, expense)
 
             # Update autocomplete suggestions
             self.update_payee_suggestions()
@@ -540,12 +468,13 @@ class ExpensesWindow(Adw.ApplicationWindow):
             expenses = [e for e in expenses if query_lower in e['payee'].lower() or query_lower in e.get('note', '').lower()]
 
         # Add expenses in reverse order (newest first)
-        for i, expense in enumerate(reversed(expenses)):
-            row = self.create_expense_row(expense, len(expenses) - 1 - i)
+        for expense in reversed(expenses):
+            row = self.create_expense_row(expense)
             self.expense_list.append(row)
 
-    def create_expense_row(self, expense, index):
+    def create_expense_row(self, expense):
         """Create a list row for an expense"""
+        expense_id = expense['id']
         row = Adw.ActionRow()
         # Escape ampersands for safe display in GTK labels
         payee_text = expense['payee'].replace('&', '&amp;')
@@ -593,7 +522,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         if recurring_id:
             recurring_button.set_icon_name('window-close-symbolic')
             recurring_button.set_tooltip_text('Stop recurring')
-            recurring_button.connect('clicked', self.on_stop_recurring, index)
+            recurring_button.connect('clicked', self.on_stop_recurring, expense_id)
             
             # Add edit button for recurring expenses
             edit_button = Gtk.Button()
@@ -601,12 +530,12 @@ class ExpensesWindow(Adw.ApplicationWindow):
             edit_button.set_tooltip_text('Edit recurring')
             edit_button.set_valign(Gtk.Align.CENTER)
             edit_button.add_css_class('flat')
-            edit_button.connect('clicked', self.on_edit_recurring, index)
+            edit_button.connect('clicked', self.on_edit_recurring, expense_id)
             row.add_suffix(edit_button)
         else:
             recurring_button.set_icon_name('view-refresh-symbolic')
             recurring_button.set_tooltip_text('Make recurring')
-            recurring_button.connect('clicked', self.on_make_recurring, index)
+            recurring_button.connect('clicked', self.on_make_recurring, expense_id)
         
         row.add_suffix(recurring_button)
 
@@ -615,7 +544,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         delete_button.set_icon_name('user-trash-symbolic')
         delete_button.set_valign(Gtk.Align.CENTER)
         delete_button.add_css_class('flat')
-        delete_button.connect('clicked', self.on_delete_expense, index)
+        delete_button.connect('clicked', self.on_delete_expense, expense_id)
 
         # Add to row
         row.add_suffix(amount_label)
@@ -623,57 +552,40 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
         return row
 
-    def on_delete_expense(self, button, index):
+    def on_delete_expense(self, button, expense_id):
         """Handle deleting an expense"""
-        expenses = self.get_current_expenses()
-        if 0 <= index < len(expenses):
-            expense = expenses[index]
-            
-            # If this expense is recurring, remove the recurring definition
-            if expense.get('recurring_id'):
-                recurring_id = expense['recurring_id']
-                # Remove from recurring list
-                self.data['recurring_expenses'] = [
-                    r for r in self.data['recurring_expenses'] 
-                    if r.get('id') != recurring_id
-                ]
-            
-            expenses.pop(index)
-            self.save_data()
-            self.update_expense_list()
-            self.update_total()
-            self.update_payee_suggestions()
-
-    def on_stop_recurring(self, button, index):
-        """Handle stopping a recurring expense"""
-        expenses = self.get_current_expenses()
-        if 0 <= index < len(expenses):
-            expense = expenses[index]
-            if expense.get('recurring_id'):
-                recurring_id = expense['recurring_id']
-                
-                # Remove from recurring definitions
-                self.data['recurring_expenses'] = [
-                    r for r in self.data['recurring_expenses'] 
-                    if r.get('id') != recurring_id
-                ]
-                
-                # Remove recurring_id from ALL expenses with this recurring_id
-                for account_expenses in self.data['expenses'].values():
-                    for exp in account_expenses:
-                        if exp.get('recurring_id') == recurring_id:
-                            exp.pop('recurring_id', None)
-                
-                self.save_data()
-                self.update_expense_list()
-
-    def on_make_recurring(self, button, index):
-        """Show dialog to make an expense recurring"""
-        expenses = self.get_current_expenses()
-        if not (0 <= index < len(expenses)):
+        expense = self.db.get_expense_by_id(expense_id)
+        if expense is None:
             return
-        
-        expense = expenses[index]
+
+        # If this expense is recurring, remove the recurring definition
+        if expense.get('recurring_id'):
+            self.db.delete_recurring(expense['recurring_id'])
+
+        self.db.delete_expense(expense_id)
+        self.update_expense_list()
+        self.update_total()
+        self.update_payee_suggestions()
+
+    def on_stop_recurring(self, button, expense_id):
+        """Handle stopping a recurring expense"""
+        expense = self.db.get_expense_by_id(expense_id)
+        if expense and expense.get('recurring_id'):
+            recurring_id = expense['recurring_id']
+
+            # Remove from recurring definitions
+            self.db.delete_recurring(recurring_id)
+
+            # Remove recurring_id from ALL expenses with this recurring_id
+            self.db.clear_recurring_from_expenses(recurring_id)
+
+            self.update_expense_list()
+
+    def on_make_recurring(self, button, expense_id):
+        """Show dialog to make an expense recurring"""
+        expense = self.db.get_expense_by_id(expense_id)
+        if expense is None:
+            return
         
         # Create a dialog for recurring setup
         dialog = Adw.MessageDialog.new(self)
@@ -727,15 +639,14 @@ class ExpensesWindow(Adw.ApplicationWindow):
                     'start_date': expense['date'],
                     'end_date': end_date if end_date else None,
                     'last_generated': expense['date'],
-                    'account': self.data['current_account']
+                    'account': self.current_account
                 }
                 
-                self.data['recurring_expenses'].append(recurring)
+                self.db.add_recurring(self.current_account, recurring)
                 
                 # Mark the original expense
-                expense['recurring_id'] = recurring['id']
+                self.db.set_expense_recurring(expense_id, recurring['id'])
                 
-                self.save_data()
                 self.update_expense_list()
                 
                 # Show confirmation
@@ -748,24 +659,18 @@ class ExpensesWindow(Adw.ApplicationWindow):
         dialog.connect('response', on_response)
         dialog.present()
     
-    def on_edit_recurring(self, button, index):
+    def on_edit_recurring(self, button, expense_id):
         """Show dialog to edit a recurring expense interval"""
-        expenses = self.get_current_expenses()
-        if not (0 <= index < len(expenses)):
+        expense = self.db.get_expense_by_id(expense_id)
+        if expense is None:
             return
-        
-        expense = expenses[index]
+
         recurring_id = expense.get('recurring_id')
         if not recurring_id:
             return
         
         # Find the recurring definition
-        recurring = None
-        for r in self.data.get('recurring_expenses', []):
-            if r.get('id') == recurring_id:
-                recurring = r
-                break
-        
+        recurring = self.db.get_recurring_by_id(recurring_id)
         if not recurring:
             return
         
@@ -818,10 +723,12 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 end_date = end_date_entry.get_text().strip()
                 
                 # Update recurring definition (does not affect past expenses)
-                recurring['frequency'] = frequency
-                recurring['end_date'] = end_date if end_date else None
+                self.db.update_recurring(
+                    recurring_id,
+                    frequency=frequency,
+                    end_date=end_date if end_date else None
+                )
                 
-                self.save_data()
                 self.update_expense_list()
                 
                 # Show confirmation
@@ -836,8 +743,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def update_total(self):
         """Update the total amount display"""
-        expenses = self.get_current_expenses()
-        total = sum(expense['amount'] for expense in expenses)
+        total = self.db.get_account_total(self.current_account)
         self.total_label.set_text(f"{total:.2f} €")
 
     def on_search_changed(self, search_entry):
@@ -989,15 +895,14 @@ class ExpensesWindow(Adw.ApplicationWindow):
             
             conn.close()
             
-            # Replace all data with imported data
-            self.data = {
+            # Replace all data via the database
+            imported_data = {
                 'accounts': account_list,
                 'current_account': account_list[0] if account_list else 'Default',
                 'expenses': expenses_data
             }
-            
-            # Save the new data
-            self.save_data()
+            self.db.replace_all_data(imported_data)
+            self.current_account = imported_data['current_account']
             
             # Return counts for the success message
             total_transactions = sum(len(expenses) for expenses in expenses_data.values())
@@ -1053,7 +958,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         try:
             # Save current data to selected file
             with open(file_path, 'w') as f:
-                json.dump(self.data, f, indent=2)
+                json.dump(self.db.get_all_data(), f, indent=2)
 
             # Show success dialog
             success_dialog = Adw.MessageDialog.new(self)
@@ -1131,24 +1036,22 @@ class ExpensesWindow(Adw.ApplicationWindow):
             if not isinstance(imported_data, dict) or 'accounts' not in imported_data or 'expenses' not in imported_data:
                 raise ValueError("Invalid JSON format")
 
-            # Replace data
-            self.data = imported_data
-
             # Ensure current_account exists
-            if 'current_account' not in self.data:
-                self.data['current_account'] = self.data['accounts'][0] if self.data['accounts'] else 'Default'
+            if 'current_account' not in imported_data:
+                imported_data['current_account'] = imported_data['accounts'][0] if imported_data['accounts'] else 'Default'
 
-            # Save to app storage
-            self.save_data()
+            # Replace data in database
+            self.db.replace_all_data(imported_data)
+            self.current_account = imported_data['current_account']
 
             # Refresh UI
             self.on_import_complete()
 
             # Show success dialog
-            total_expenses = sum(len(expenses) for expenses in self.data['expenses'].values())
+            total_expenses = sum(len(exps) for exps in imported_data['expenses'].values())
             success_dialog = Adw.MessageDialog.new(self)
             success_dialog.set_heading("Import Successful")
-            success_dialog.set_body(f"Imported {len(self.data['accounts'])} account(s) with {total_expenses} expense(s)")
+            success_dialog.set_body(f"Imported {len(imported_data['accounts'])} account(s) with {total_expenses} expense(s)")
             success_dialog.add_response("ok", "OK")
             success_dialog.present()
 
