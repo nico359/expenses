@@ -18,7 +18,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from gi.repository import Adw, Gtk, GLib, Gio
-import json
 import os
 import sqlite3
 from datetime import datetime
@@ -45,12 +44,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
         # Initialize SQLite database
         db_path = os.path.join(GLib.get_user_data_dir(), 'expenses.db')
-        json_path = os.path.join(GLib.get_user_data_dir(), 'expenses.json')
         self.db = Database(db_path)
-
-        # One-time migration from the old JSON file
-        if not self.db.get_accounts():
-            self.db.migrate_from_json(json_path)
 
         # Ensure at least one account exists
         if not self.db.get_accounts():
@@ -62,6 +56,8 @@ class ExpensesWindow(Adw.ApplicationWindow):
             self.db.get_accounts()[0]
         )
         self.search_query = ''
+        self.page_size = 50
+        self.displayed_count = 0
         
         # Process recurring expenses on startup
         self.process_recurring_expenses()
@@ -80,18 +76,10 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.account_options_button.connect('clicked', self.on_account_options)
         self.search_entry.connect('search-changed', self.on_search_changed)
 
-        # Setup import/export actions
+        # Setup import action
         import_action = Gio.SimpleAction.new("import-db", None)
         import_action.connect("activate", self.on_import_database)
         self.add_action(import_action)
-        
-        export_action = Gio.SimpleAction.new("export-json", None)
-        export_action.connect("activate", self.on_export_json)
-        self.add_action(export_action)
-        
-        import_json_action = Gio.SimpleAction.new("import-json", None)
-        import_json_action.connect("activate", self.on_import_json)
-        self.add_action(import_json_action)
 
         # Update UI
         self.update_expense_list()
@@ -307,10 +295,6 @@ class ExpensesWindow(Adw.ApplicationWindow):
             self.update_expense_list()
             self.update_total()
 
-    def get_current_expenses(self):
-        """Get expenses for current account from the database."""
-        return self.db.get_expenses(self.current_account)
-
     def process_recurring_expenses(self):
         """Check and generate missing recurring expenses on startup"""
         from datetime import timedelta
@@ -451,7 +435,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
             dialog.present()
 
     def update_expense_list(self):
-        """Update the expense list display"""
+        """Rebuild the expense list with the first page of results."""
         # Clear existing items
         while True:
             row = self.expense_list.get_row_at_index(0)
@@ -459,18 +443,53 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 break
             self.expense_list.remove(row)
 
-        # Get expenses for current account
-        expenses = self.get_current_expenses()
+        self.displayed_count = 0
+        search = self.search_query or None
 
-        # Filter by search query if present
-        if self.search_query:
-            query_lower = self.search_query.lower()
-            expenses = [e for e in expenses if query_lower in e['payee'].lower() or query_lower in e.get('note', '').lower()]
+        # Load first page (already newest-first from DB)
+        expenses = self.db.get_expenses(
+            self.current_account,
+            limit=self.page_size, offset=0,
+            search=search,
+        )
+        total = self.db.count_expenses(self.current_account, search=search)
 
-        # Add expenses in reverse order (newest first)
-        for expense in reversed(expenses):
-            row = self.create_expense_row(expense)
-            self.expense_list.append(row)
+        for expense in expenses:
+            self.expense_list.append(self.create_expense_row(expense))
+        self.displayed_count = len(expenses)
+
+        # "Show more" row if there are additional results
+        if self.displayed_count < total:
+            self._append_show_more_row(total)
+
+    def _append_show_more_row(self, total):
+        """Add a 'Show more' button row at the bottom of the list."""
+        remaining = total - self.displayed_count
+        row = Adw.ActionRow()
+        row.set_title(f"Show more ({remaining} remaining)")
+        row.set_activatable(True)
+        row.connect('activated', self._on_show_more, total)
+        self.expense_list.append(row)
+
+    def _on_show_more(self, row, total):
+        """Load the next page of expenses."""
+        # Remove the "Show more" row
+        self.expense_list.remove(row)
+
+        search = self.search_query or None
+        expenses = self.db.get_expenses(
+            self.current_account,
+            limit=self.page_size,
+            offset=self.displayed_count,
+            search=search,
+        )
+
+        for expense in expenses:
+            self.expense_list.append(self.create_expense_row(expense))
+        self.displayed_count += len(expenses)
+
+        if self.displayed_count < total:
+            self._append_show_more_row(total)
 
     def create_expense_row(self, expense):
         """Create a list row for an expense"""
@@ -919,145 +938,3 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.update_expense_list()
         self.update_total()
         self.update_payee_suggestions()
-
-    def on_export_json(self, action, param):
-        """Export current data to JSON file with timestamp"""
-        dialog = Gtk.FileChooserDialog(
-            title="Export Expenses",
-            transient_for=self,
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.add_buttons(
-            "_Cancel", Gtk.ResponseType.CANCEL,
-            "_Save", Gtk.ResponseType.OK
-        )
-
-        # Set default filename with timestamp
-        now = datetime.now()
-        default_filename = f"expenses-backup-{now.strftime('%Y-%m-%d')}.json"
-        dialog.set_current_name(default_filename)
-
-        # Add JSON filter
-        filter = Gtk.FileFilter()
-        filter.set_name("JSON files")
-        filter.add_pattern("*.json")
-        dialog.add_filter(filter)
-
-        dialog.connect('response', self.on_export_file_selected)
-        dialog.present()
-
-    def on_export_file_selected(self, dialog, response):
-        """Handle export file selection"""
-        if response != Gtk.ResponseType.OK:
-            dialog.close()
-            return
-
-        file_path = dialog.get_file().get_path()
-        dialog.close()
-
-        try:
-            # Save current data to selected file
-            with open(file_path, 'w') as f:
-                json.dump(self.db.get_all_data(), f, indent=2)
-
-            # Show success dialog
-            success_dialog = Adw.MessageDialog.new(self)
-            success_dialog.set_heading("Export Successful")
-            success_dialog.set_body(f"Data exported to:\n{file_path}")
-            success_dialog.add_response("ok", "OK")
-            success_dialog.present()
-
-        except Exception as e:
-            error_dialog = Adw.MessageDialog.new(self)
-            error_dialog.set_heading("Export Failed")
-            error_dialog.set_body(f"Could not save file: {str(e)}")
-            error_dialog.add_response("ok", "OK")
-            error_dialog.present()
-
-    def on_import_json(self, action, param):
-        """Import data from JSON file"""
-        dialog = Gtk.FileChooserDialog(
-            title="Import Expenses from JSON",
-            transient_for=self,
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        dialog.add_buttons(
-            "_Cancel", Gtk.ResponseType.CANCEL,
-            "_Open", Gtk.ResponseType.OK
-        )
-
-        # Add JSON filter
-        filter = Gtk.FileFilter()
-        filter.set_name("JSON files")
-        filter.add_pattern("*.json")
-        dialog.add_filter(filter)
-
-        dialog.connect('response', self.on_import_json_file_selected)
-        dialog.present()
-
-    def on_import_json_file_selected(self, dialog, response):
-        """Handle JSON import file selection"""
-        if response != Gtk.ResponseType.OK:
-            dialog.close()
-            return
-
-        file_path = dialog.get_file().get_path()
-        dialog.close()
-
-        try:
-            # Confirm before replacing data
-            confirm_dialog = Adw.MessageDialog.new(self)
-            confirm_dialog.set_heading("Replace Existing Data?")
-            confirm_dialog.set_body("This will replace all current expenses. Continue?")
-            confirm_dialog.add_response("cancel", "Cancel")
-            confirm_dialog.add_response("import", "Import")
-            confirm_dialog.set_response_appearance("import", Adw.ResponseAppearance.DESTRUCTIVE)
-            confirm_dialog.connect('response', self.on_json_import_confirmed, file_path)
-            confirm_dialog.present()
-
-        except Exception as e:
-            error_dialog = Adw.MessageDialog.new(self)
-            error_dialog.set_heading("Import Failed")
-            error_dialog.set_body(f"Could not open file: {str(e)}")
-            error_dialog.add_response("ok", "OK")
-            error_dialog.present()
-
-    def on_json_import_confirmed(self, dialog, response, file_path):
-        """Handle JSON import confirmation"""
-        if response != "import":
-            return
-
-        try:
-            # Load JSON data
-            with open(file_path, 'r') as f:
-                imported_data = json.load(f)
-
-            # Validate structure
-            if not isinstance(imported_data, dict) or 'accounts' not in imported_data or 'expenses' not in imported_data:
-                raise ValueError("Invalid JSON format")
-
-            # Ensure current_account exists
-            if 'current_account' not in imported_data:
-                imported_data['current_account'] = imported_data['accounts'][0] if imported_data['accounts'] else 'Default'
-
-            # Replace data in database
-            self.db.replace_all_data(imported_data)
-            self.current_account = imported_data['current_account']
-
-            # Refresh UI
-            self.on_import_complete()
-
-            # Show success dialog
-            total_expenses = sum(len(exps) for exps in imported_data['expenses'].values())
-            success_dialog = Adw.MessageDialog.new(self)
-            success_dialog.set_heading("Import Successful")
-            success_dialog.set_body(f"Imported {len(imported_data['accounts'])} account(s) with {total_expenses} expense(s)")
-            success_dialog.add_response("ok", "OK")
-            success_dialog.present()
-
-        except Exception as e:
-            error_dialog = Adw.MessageDialog.new(self)
-            error_dialog.set_heading("Import Failed")
-            error_dialog.set_body(f"Could not import file: {str(e)}")
-            error_dialog.add_response("ok", "OK")
-            error_dialog.present()

@@ -19,7 +19,6 @@
 
 import sqlite3
 import os
-import json
 
 
 class Database:
@@ -90,38 +89,6 @@ class Database:
         if self.conn:
             self.conn.close()
 
-    # ── Migration ──────────────────────────────────────────────────────
-
-    def migrate_from_json(self, json_path):
-        """One-time import of an existing expenses.json into SQLite."""
-        if not os.path.exists(json_path):
-            return False
-
-        try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return False
-
-        # Handle old list-only format
-        if isinstance(data, list):
-            data = {
-                'accounts': ['Default'],
-                'current_account': 'Default',
-                'expenses': {'Default': data},
-                'recurring_expenses': []
-            }
-
-        self.replace_all_data(data)
-
-        # Keep the old file as a backup
-        try:
-            os.rename(json_path, json_path + '.migrated')
-        except OSError:
-            pass
-
-        return True
-
     # ── Account operations ─────────────────────────────────────────────
 
     def get_accounts(self):
@@ -174,24 +141,45 @@ class Database:
 
     # ── Expense operations ─────────────────────────────────────────────
 
-    def get_expenses(self, account_name):
+    def get_expenses(self, account_name, *, limit=None, offset=0, search=None):
         """Return expenses for *account_name* as a list of dicts.
 
-        Each dict contains an ``id`` key with the SQLite row id.
-        Boolean fields (``is_income``, ``is_opening_balance``) are
-        returned as Python bools.
+        Results are ordered newest-first (descending id).
+
+        Parameters
+        ----------
+        limit : int or None
+            Maximum number of rows to return.  ``None`` means all.
+        offset : int
+            Number of rows to skip (for pagination).
+        search : str or None
+            If given, only return expenses whose payee or note contains
+            this substring (case-insensitive).
         """
         account_id = self._get_account_id(account_name)
         if account_id is None:
             return []
 
-        rows = self.conn.execute("""
+        sql = """
             SELECT id, amount, payee, note, date, is_income,
                    is_opening_balance, recurring_id
             FROM expenses
             WHERE account_id = ?
-            ORDER BY id
-        """, (account_id,)).fetchall()
+        """
+        params = [account_id]
+
+        if search:
+            sql += " AND (payee LIKE ? COLLATE NOCASE OR note LIKE ? COLLATE NOCASE)"
+            like = f"%{search}%"
+            params += [like, like]
+
+        sql += " ORDER BY id DESC"
+
+        if limit is not None:
+            sql += " LIMIT ? OFFSET ?"
+            params += [limit, offset]
+
+        rows = self.conn.execute(sql, params).fetchall()
 
         results = []
         for r in rows:
@@ -200,6 +188,22 @@ class Database:
             d['is_opening_balance'] = bool(d['is_opening_balance'])
             results.append(d)
         return results
+
+    def count_expenses(self, account_name, *, search=None):
+        """Return the total number of expenses for *account_name*."""
+        account_id = self._get_account_id(account_name)
+        if account_id is None:
+            return 0
+
+        sql = "SELECT COUNT(*) AS cnt FROM expenses WHERE account_id = ?"
+        params = [account_id]
+
+        if search:
+            sql += " AND (payee LIKE ? COLLATE NOCASE OR note LIKE ? COLLATE NOCASE)"
+            like = f"%{search}%"
+            params += [like, like]
+
+        return self.conn.execute(sql, params).fetchone()['cnt']
 
     def get_expense_by_id(self, expense_id):
         """Return a single expense dict or None."""
@@ -456,48 +460,4 @@ class Database:
         )
         self.conn.commit()
 
-    def get_all_data(self):
-        """Export the full database as a JSON-compatible dict."""
-        accounts = self.get_accounts()
-        current_account = self.get_setting(
-            'current_account', accounts[0] if accounts else 'Default')
 
-        expenses = {}
-        for acct in accounts:
-            acct_expenses = self.get_expenses(acct)
-            expenses[acct] = []
-            for exp in acct_expenses:
-                entry = {
-                    'amount': exp['amount'],
-                    'payee': exp['payee'],
-                    'note': exp['note'],
-                    'date': exp['date'],
-                    'is_income': exp['is_income'],
-                }
-                if exp.get('is_opening_balance'):
-                    entry['is_opening_balance'] = True
-                if exp.get('recurring_id'):
-                    entry['recurring_id'] = exp['recurring_id']
-                expenses[acct].append(entry)
-
-        recurring_export = []
-        for rec in self.get_recurring_expenses():
-            recurring_export.append({
-                'id': rec['id'],
-                'amount': rec['amount'],
-                'payee': rec['payee'],
-                'note': rec['note'],
-                'is_income': rec['is_income'],
-                'frequency': rec['frequency'],
-                'start_date': rec['start_date'],
-                'end_date': rec['end_date'],
-                'last_generated': rec['last_generated'],
-                'account': rec['account'],
-            })
-
-        return {
-            'accounts': accounts,
-            'current_account': current_account,
-            'expenses': expenses,
-            'recurring_expenses': recurring_export,
-        }
