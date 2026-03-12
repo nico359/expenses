@@ -20,6 +20,8 @@
 from gi.repository import Adw, Gtk, GLib, Gio
 import os
 import sqlite3
+import tempfile
+import zipfile
 from datetime import datetime
 
 from .db import Database
@@ -775,9 +777,9 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.update_expense_list()
 
     def on_import_database(self, action, param):
-        """Show file chooser for importing SQLite database"""
+        """Show file chooser for importing MyExpenses backup (zip or raw DB)"""
         dialog = Gtk.FileDialog()
-        dialog.set_title("Import Database")
+        dialog.set_title("Import from Android App")
         dialog.set_modal(True)
         
         # Set initial folder to home directory
@@ -788,19 +790,20 @@ class ExpensesWindow(Adw.ApplicationWindow):
         except:
             pass
         
-        # Create filter for SQLite databases
         filters = Gio.ListStore.new(Gtk.FileFilter)
+
+        backup_filter = Gtk.FileFilter()
+        backup_filter.set_name("MyExpenses Backups")
+        backup_filter.add_pattern("*.zip")
+        backup_filter.add_pattern("BACKUP")
+        backup_filter.add_pattern("*.db")
+        backup_filter.add_pattern("*.sqlite")
+        filters.append(backup_filter)
+
         all_filter = Gtk.FileFilter()
         all_filter.set_name("All Files")
         all_filter.add_pattern("*")
         filters.append(all_filter)
-        
-        db_filter = Gtk.FileFilter()
-        db_filter.set_name("SQLite Databases")
-        db_filter.add_pattern("BACKUP")
-        db_filter.add_pattern("*.db")
-        db_filter.add_pattern("*.sqlite")
-        filters.append(db_filter)
         
         dialog.set_filters(filters)
         dialog.open(self, None, self.on_import_file_selected)
@@ -810,11 +813,13 @@ class ExpensesWindow(Adw.ApplicationWindow):
         try:
             file = dialog.open_finish(result)
             path = file.get_path()
-            
-            # Import the database
+
+            # If it's a zip, extract the BACKUP database to a temp file
+            if zipfile.is_zipfile(path):
+                path = self._extract_backup_from_zip(path)
+
             accounts_imported, transactions_imported = self.import_sqlite_database(path)
             
-            # Show success message
             success_dialog = Adw.MessageDialog.new(self)
             success_dialog.set_heading("Import Successful")
             success_dialog.set_body(f"Imported {accounts_imported} account(s) and {transactions_imported} transaction(s)")
@@ -824,12 +829,41 @@ class ExpensesWindow(Adw.ApplicationWindow):
             success_dialog.present()
             
         except GLib.Error as e:
-            # Show error message
             error_dialog = Adw.MessageDialog.new(self)
             error_dialog.set_heading("Import Failed")
             error_dialog.set_body(f"Could not open file: {str(e)}")
             error_dialog.add_response("ok", "OK")
             error_dialog.present()
+        except Exception as e:
+            error_dialog = Adw.MessageDialog.new(self)
+            error_dialog.set_heading("Import Failed")
+            error_dialog.set_body(str(e))
+            error_dialog.add_response("ok", "OK")
+            error_dialog.present()
+
+    def _extract_backup_from_zip(self, zip_path):
+        """Extract the BACKUP database from a MyExpenses zip archive.
+
+        Returns the path to the extracted file.
+        """
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            names = zf.namelist()
+            # Look for the BACKUP file (the actual SQLite database)
+            backup_name = None
+            for name in names:
+                if name == 'BACKUP' or name.endswith('/BACKUP'):
+                    backup_name = name
+                    break
+
+            if backup_name is None:
+                raise ValueError(
+                    "No BACKUP database found in the zip file.\n"
+                    f"Contents: {', '.join(names)}"
+                )
+
+            tmp_dir = tempfile.mkdtemp(prefix='expenses-import-')
+            zf.extract(backup_name, tmp_dir)
+            return os.path.join(tmp_dir, backup_name)
 
     def import_sqlite_database(self, db_path):
         """Import data from SQLite database"""
