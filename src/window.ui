@@ -223,6 +223,10 @@
         <attribute name="action">win.export-db</attribute>
       </item>
       <item>
+        <attribute name="label" translatable="yes">_Export for MyExpenses</attribute>
+        <attribute name="action">win.export-myexpenses</attribute>
+      </item>
+      <item>
         <attribute name="label" translatable="yes">_Import Database</attribute>
         <attribute name="action">win.import-backup</attribute>
       </item>

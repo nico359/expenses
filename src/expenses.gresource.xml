@@ -3,5 +3,6 @@
   <gresource prefix="/io/github/nico359/expenses">
     <file preprocess="xml-stripblanks">window.ui</file>
     <file preprocess="xml-stripblanks">shortcuts-dialog.ui</file>
+    <file>myexpenses_schema.sql</file>
   </gresource>
 </gresources>

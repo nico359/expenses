@@ -21,6 +21,7 @@ from gi.repository import Adw, Gtk, GLib, Gio
 import os
 import sqlite3
 import tempfile
+import uuid
 import zipfile
 from datetime import datetime
 
@@ -90,6 +91,10 @@ class ExpensesWindow(Adw.ApplicationWindow):
         import_backup_action = Gio.SimpleAction.new("import-backup", None)
         import_backup_action.connect("activate", self.on_import_backup)
         self.add_action(import_backup_action)
+
+        export_me_action = Gio.SimpleAction.new("export-myexpenses", None)
+        export_me_action.connect("activate", self.on_export_myexpenses)
+        self.add_action(export_me_action)
 
         # Update UI
         self.update_expense_list()
@@ -661,7 +666,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 end_date = end_date_entry.get_text().strip()
                 
                 # Create recurring definition
-                import uuid
+                # Create recurring definition
                 recurring = {
                     'id': str(uuid.uuid4()),
                     'amount': expense['amount'],
@@ -983,6 +988,147 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.update_expense_list()
         self.update_total()
         self.update_payee_suggestions()
+
+    # ── MyExpenses-compatible export ───────────────────────────────────
+
+    def on_export_myexpenses(self, action, param):
+        """Export data as a MyExpenses-compatible backup zip"""
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Export for MyExpenses")
+        dialog.set_modal(True)
+
+        now = datetime.now()
+        dialog.set_initial_name(
+            f"myexpenses-backup-{now.strftime('%Y%m%d-%H%M%S')}.zip"
+        )
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        zip_filter = Gtk.FileFilter()
+        zip_filter.set_name("Zip Archives")
+        zip_filter.add_pattern("*.zip")
+        filters.append(zip_filter)
+        dialog.set_filters(filters)
+
+        dialog.save(self, None, self._on_export_myexpenses_selected)
+
+    def _on_export_myexpenses_selected(self, dialog, result):
+        try:
+            file = dialog.save_finish(result)
+            dest_path = file.get_path()
+        except GLib.Error:
+            return  # user cancelled
+
+        try:
+            self._build_myexpenses_backup(dest_path)
+
+            success = Adw.MessageDialog.new(self)
+            success.set_heading("Export Successful")
+            success.set_body(
+                f"MyExpenses-compatible backup exported to:\n{dest_path}"
+            )
+            success.add_response("ok", "OK")
+            success.present()
+
+        except Exception as e:
+            error = Adw.MessageDialog.new(self)
+            error.set_heading("Export Failed")
+            error.set_body(str(e))
+            error.add_response("ok", "OK")
+            error.present()
+
+    def _build_myexpenses_backup(self, zip_path):
+        """Build a MyExpenses-compatible BACKUP database and package as zip"""
+        # Load schema from bundled gresource
+        schema_bytes = Gio.resources_lookup_data(
+            '/io/github/nico359/expenses/myexpenses_schema.sql',
+            Gio.ResourceLookupFlags.NONE,
+        )
+        schema_sql = schema_bytes.get_data().decode('utf-8')
+
+        with tempfile.TemporaryDirectory(prefix='expenses-export-') as tmp_dir:
+            db_path = os.path.join(tmp_dir, 'BACKUP')
+            conn = sqlite3.connect(db_path)
+            conn.executescript(schema_sql)
+
+            accounts = self.db.get_accounts()
+            account_id_map = {}  # our account name → MyExpenses _id
+
+            for name in accounts:
+                our_id = self.db._get_account_id(name)
+
+                # Get opening balance (stored as a pseudo-expense)
+                row = self.db.conn.execute(
+                    "SELECT amount, is_income FROM expenses "
+                    "WHERE account_id = ? AND is_opening_balance = 1",
+                    (our_id,),
+                ).fetchone()
+                opening_cents = round(row[0] * 100) if row else 0
+
+                conn.execute(
+                    "INSERT INTO accounts "
+                    "(label, opening_balance, description, currency, type, "
+                    " color, uuid) "
+                    "VALUES (?, ?, '', 'EUR', 1, -3355444, ?)",
+                    (name, opening_cents, str(uuid.uuid4())),
+                )
+                me_id = conn.execute(
+                    "SELECT last_insert_rowid()"
+                ).fetchone()[0]
+                account_id_map[name] = me_id
+
+            # Build payee lookup
+            all_payees = self.db.get_all_payees()
+            payee_id_map = {}
+            for payee_name in all_payees:
+                conn.execute(
+                    "INSERT INTO payee (name, name_normalized) VALUES (?, ?)",
+                    (payee_name, payee_name.lower()),
+                )
+                pid = conn.execute(
+                    "SELECT last_insert_rowid()"
+                ).fetchone()[0]
+                payee_id_map[payee_name] = pid
+
+            # Export transactions
+            for name in accounts:
+                our_id = self.db._get_account_id(name)
+                me_account_id = account_id_map[name]
+
+                rows = self.db.conn.execute(
+                    "SELECT amount, payee, note, date, is_income "
+                    "FROM expenses "
+                    "WHERE account_id = ? AND is_opening_balance = 0 "
+                    "ORDER BY id",
+                    (our_id,),
+                ).fetchall()
+
+                for amount, payee, note, date_str, is_income in rows:
+                    amount_cents = round(amount * 100)
+                    if not is_income:
+                        amount_cents = -amount_cents
+
+                    try:
+                        dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M')
+                    except ValueError:
+                        dt = datetime.strptime(date_str, '%Y-%m-%d')
+                    timestamp = int(dt.timestamp())
+
+                    payee_id = payee_id_map.get(payee)
+
+                    conn.execute(
+                        "INSERT INTO transactions "
+                        "(comment, date, value_date, amount, account_id, "
+                        " payee_id, cr_status, number, uuid) "
+                        "VALUES (?, ?, ?, ?, ?, ?, 'UNRECONCILED', '', ?)",
+                        (note or '', timestamp, timestamp, amount_cents,
+                         me_account_id, payee_id, str(uuid.uuid4())),
+                    )
+
+            conn.commit()
+            conn.close()
+
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.write(db_path, 'BACKUP')
 
     # ── Database export / import ───────────────────────────────────────
 
