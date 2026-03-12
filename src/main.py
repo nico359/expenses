@@ -54,7 +54,7 @@ class ExpensesApplication(Adw.Application):
         about = Adw.AboutDialog(application_name='expenses',
                                 application_icon='io.github.nico359.expenses',
                                 developer_name='nico359',
-                                version='1.1',
+                                version='2.0',
                                 developers=['nico359', 'Copilot CLI'],
                                 copyright='© 2026 Unknown')
         # Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
