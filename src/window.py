@@ -96,9 +96,16 @@ class ExpensesWindow(Adw.ApplicationWindow):
         export_me_action.connect("activate", self.on_export_myexpenses)
         self.add_action(export_me_action)
 
+        # Close database when window is destroyed
+        self.connect('close-request', self._on_close_request)
+
         # Update UI
         self.update_expense_list()
         self.update_total()
+
+    def _on_close_request(self, window):
+        self.db.close()
+        return False
 
     def setup_payee_autocomplete(self):
         """Setup autocomplete for payee entry"""
@@ -329,7 +336,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
             if recurring.get('last_generated'):
                 try:
                     last_generated = datetime.fromisoformat(recurring['last_generated'])
-                except:
+                except (ValueError, TypeError):
                     last_generated = start_date
             else:
                 last_generated = start_date
@@ -348,11 +355,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
                     try:
                         try:
                             end_date = datetime.fromisoformat(recurring['end_date'])
-                        except:
+                        except ValueError:
                             end_date = datetime.fromisoformat(recurring['end_date'] + 'T23:59:59')
                         if next_date.date() > end_date.date():
                             break
-                    except:
+                    except (ValueError, TypeError):
                         pass
                 
                 target_date_str = next_date.strftime('%Y-%m-%d')
@@ -381,26 +388,33 @@ class ExpensesWindow(Adw.ApplicationWindow):
     def _add_frequency(self, date_obj, frequency):
         """Add frequency duration to a date"""
         from datetime import timedelta
-        
+        import calendar
+
         if frequency == 'daily':
             return date_obj + timedelta(days=1)
         elif frequency == 'weekly':
             return date_obj + timedelta(weeks=1)
         elif frequency == 'monthly':
-            # Add one month
-            if date_obj.month == 12:
-                return date_obj.replace(year=date_obj.year + 1, month=1)
-            else:
-                return date_obj.replace(month=date_obj.month + 1)
+            next_month = date_obj.month % 12 + 1
+            next_year = date_obj.year + (1 if date_obj.month == 12 else 0)
+            max_day = calendar.monthrange(next_year, next_month)[1]
+            return date_obj.replace(
+                year=next_year, month=next_month,
+                day=min(date_obj.day, max_day),
+            )
         elif frequency == 'yearly':
-            return date_obj.replace(year=date_obj.year + 1)
+            # Handle Feb 29 in leap years
+            max_day = calendar.monthrange(date_obj.year + 1, date_obj.month)[1]
+            return date_obj.replace(
+                year=date_obj.year + 1,
+                day=min(date_obj.day, max_day),
+            )
         else:
-            # Try to parse as custom interval (number of days)
             try:
                 days = int(frequency)
                 return date_obj + timedelta(days=days)
-            except:
-                return date_obj + timedelta(days=1)  # Default to daily
+            except (ValueError, TypeError):
+                return date_obj + timedelta(days=1)
 
     def on_add_expense(self, widget):
         """Handle adding a new expense"""
@@ -800,7 +814,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
         try:
             initial_folder = Gio.File.new_for_path(home_dir)
             dialog.set_initial_folder(initial_folder)
-        except:
+        except Exception:
             pass
         
         filters = Gio.ListStore.new(Gtk.FileFilter)
@@ -876,10 +890,19 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
             tmp_dir = tempfile.mkdtemp(prefix='expenses-import-')
             zf.extract(backup_name, tmp_dir)
-            return os.path.join(tmp_dir, backup_name)
+            extracted = os.path.join(tmp_dir, backup_name)
+
+            # Guard against path traversal in malicious zip entries
+            if not os.path.abspath(extracted).startswith(
+                os.path.abspath(tmp_dir) + os.sep
+            ):
+                raise ValueError("Zip contains unsafe path")
+
+            return extracted
 
     def import_sqlite_database(self, db_path):
         """Import data from SQLite database"""
+        conn = None
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
@@ -941,7 +964,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 try:
                     date_obj = datetime.fromtimestamp(timestamp)
                     date_str = date_obj.strftime('%Y-%m-%d %H:%M')
-                except:
+                except (ValueError, OSError, OverflowError):
                     date_str = datetime.now().strftime('%Y-%m-%d %H:%M')
                 
                 # Use payee name if available, otherwise fall back to default
@@ -981,6 +1004,9 @@ class ExpensesWindow(Adw.ApplicationWindow):
         except Exception as e:
             print(f"Error importing database: {e}")
             raise
+        finally:
+            if conn:
+                conn.close()
 
     def on_import_complete(self):
         """Handle import completion - refresh UI"""
