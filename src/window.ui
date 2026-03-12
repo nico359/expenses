@@ -215,16 +215,18 @@
   <menu id="primary_menu">
     <section>
       <item>
-        <attribute name="label" translatable="yes">_Import from Android App</attribute>
+        <attribute name="label" translatable="yes">_Import from MyExpenses</attribute>
         <attribute name="action">win.import-db</attribute>
-      </item>
-      <item>
-        <attribute name="label" translatable="yes">_Export Database</attribute>
-        <attribute name="action">win.export-db</attribute>
       </item>
       <item>
         <attribute name="label" translatable="yes">_Export for MyExpenses</attribute>
         <attribute name="action">win.export-myexpenses</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Export Database</attribute>
+        <attribute name="action">win.export-db</attribute>
       </item>
       <item>
         <attribute name="label" translatable="yes">_Import Database</attribute>

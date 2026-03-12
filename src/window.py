@@ -792,7 +792,7 @@ class ExpensesWindow(Adw.ApplicationWindow):
     def on_import_database(self, action, param):
         """Show file chooser for importing MyExpenses backup (zip or raw DB)"""
         dialog = Gtk.FileDialog()
-        dialog.set_title("Import from Android App")
+        dialog.set_title("Import from MyExpenses")
         dialog.set_modal(True)
         
         # Set initial folder to home directory
