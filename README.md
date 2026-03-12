@@ -9,3 +9,8 @@ https://github.com/mtotschnig/MyExpenses
 # Building
 
 The easiest way to build the app from source is by using the Gnome Builder IDE.
+
+# Note
+
+A note about the commit history:
+The two commits from 18.03.2026 are not actually from this day (right now it says "commited next week"). I tested something with recurring expenses and therefore manipulated the system time. Unfortunately i forgot to set the date correctly before commiting. These two commits were made on 11.03.2026.
