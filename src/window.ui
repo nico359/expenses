@@ -218,6 +218,14 @@
         <attribute name="label" translatable="yes">_Import from Android App</attribute>
         <attribute name="action">win.import-db</attribute>
       </item>
+      <item>
+        <attribute name="label" translatable="yes">_Export Database</attribute>
+        <attribute name="action">win.export-db</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Import Database</attribute>
+        <attribute name="action">win.import-backup</attribute>
+      </item>
     </section>
     <section>
       <item>

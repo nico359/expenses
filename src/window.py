@@ -78,10 +78,18 @@ class ExpensesWindow(Adw.ApplicationWindow):
         self.account_options_button.connect('clicked', self.on_account_options)
         self.search_entry.connect('search-changed', self.on_search_changed)
 
-        # Setup import action
+        # Setup import/export actions
         import_action = Gio.SimpleAction.new("import-db", None)
         import_action.connect("activate", self.on_import_database)
         self.add_action(import_action)
+
+        export_action = Gio.SimpleAction.new("export-db", None)
+        export_action.connect("activate", self.on_export_database)
+        self.add_action(export_action)
+
+        import_backup_action = Gio.SimpleAction.new("import-backup", None)
+        import_backup_action.connect("activate", self.on_import_backup)
+        self.add_action(import_backup_action)
 
         # Update UI
         self.update_expense_list()
@@ -971,8 +979,130 @@ class ExpensesWindow(Adw.ApplicationWindow):
 
     def on_import_complete(self):
         """Handle import completion - refresh UI"""
-        # Refresh the UI
         self.setup_account_dropdown()
         self.update_expense_list()
         self.update_total()
         self.update_payee_suggestions()
+
+    # ── Database export / import ───────────────────────────────────────
+
+    def on_export_database(self, action, param):
+        """Export the database as a .db file"""
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Export Database")
+        dialog.set_modal(True)
+
+        now = datetime.now()
+        dialog.set_initial_name(
+            f"expenses-backup-{now.strftime('%Y%m%d-%H%M%S')}.db"
+        )
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        db_filter = Gtk.FileFilter()
+        db_filter.set_name("SQLite Databases")
+        db_filter.add_pattern("*.db")
+        filters.append(db_filter)
+        dialog.set_filters(filters)
+
+        dialog.save(self, None, self._on_export_db_selected)
+
+    def _on_export_db_selected(self, dialog, result):
+        try:
+            file = dialog.save_finish(result)
+            dest_path = file.get_path()
+
+            # Use SQLite's online-backup API for a consistent snapshot
+            dst = sqlite3.connect(dest_path)
+            self.db.conn.backup(dst)
+            dst.close()
+
+            success = Adw.MessageDialog.new(self)
+            success.set_heading("Export Successful")
+            success.set_body(f"Database exported to:\n{dest_path}")
+            success.add_response("ok", "OK")
+            success.present()
+
+        except GLib.Error:
+            pass  # user cancelled
+        except Exception as e:
+            error = Adw.MessageDialog.new(self)
+            error.set_heading("Export Failed")
+            error.set_body(str(e))
+            error.add_response("ok", "OK")
+            error.present()
+
+    def on_import_backup(self, action, param):
+        """Import a previously exported .db file"""
+        dialog = Gtk.FileDialog()
+        dialog.set_title("Import Database")
+        dialog.set_modal(True)
+
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        db_filter = Gtk.FileFilter()
+        db_filter.set_name("SQLite Databases")
+        db_filter.add_pattern("*.db")
+        db_filter.add_pattern("*.sqlite")
+        filters.append(db_filter)
+
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All Files")
+        all_filter.add_pattern("*")
+        filters.append(all_filter)
+
+        dialog.set_filters(filters)
+        dialog.open(self, None, self._on_import_backup_selected)
+
+    def _on_import_backup_selected(self, dialog, result):
+        try:
+            file = dialog.open_finish(result)
+            path = file.get_path()
+        except GLib.Error:
+            return  # user cancelled
+
+        # Ask for confirmation before replacing data
+        confirm = Adw.MessageDialog.new(self)
+        confirm.set_heading("Replace Existing Data?")
+        confirm.set_body(
+            "This will replace all current accounts, expenses and "
+            "recurring definitions with the contents of the backup."
+        )
+        confirm.add_response("cancel", "Cancel")
+        confirm.add_response("import", "Import")
+        confirm.set_response_appearance(
+            "import", Adw.ResponseAppearance.DESTRUCTIVE
+        )
+        confirm.set_default_response("cancel")
+        confirm.connect("response", self._on_import_backup_confirmed, path)
+        confirm.present()
+
+    def _on_import_backup_confirmed(self, dialog, response, path):
+        if response != "import":
+            return
+
+        try:
+            # Restore from the selected file using SQLite backup API
+            src = sqlite3.connect(path)
+            src.backup(self.db.conn)
+            src.close()
+
+            # Re-read settings
+            accounts = self.db.get_accounts()
+            self.current_account = self.db.get_setting(
+                'current_account',
+                accounts[0] if accounts else 'Default',
+            )
+
+            self.on_import_complete()
+
+            success = Adw.MessageDialog.new(self)
+            success.set_heading("Import Successful")
+            success.set_body("Database restored from backup.")
+            success.add_response("ok", "OK")
+            success.present()
+
+        except Exception as e:
+            error = Adw.MessageDialog.new(self)
+            error.set_heading("Import Failed")
+            error.set_body(str(e))
+            error.add_response("ok", "OK")
+            error.present()
