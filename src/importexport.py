@@ -410,10 +410,20 @@ class ImportExportMixin:
             file = dialog.save_finish(result)
             dest_path = file.get_path()
 
-            # Use SQLite's online-backup API for a consistent snapshot
-            dst = sqlite3.connect(dest_path)
-            self.db.conn.backup(dst)
-            dst.close()
+            # Build the export in a temp file (writable), switch away from
+            # WAL mode there, then copy the clean result to the portal path.
+            tmp_fd, tmp_path = tempfile.mkstemp(suffix='.db')
+            os.close(tmp_fd)
+            try:
+                dst = sqlite3.connect(tmp_path)
+                self.db.conn.backup(dst)
+                dst.execute("PRAGMA journal_mode=DELETE")
+                dst.close()
+
+                import shutil
+                shutil.copy2(tmp_path, dest_path)
+            finally:
+                os.unlink(tmp_path)
 
             success = Adw.MessageDialog.new(self)
             success.set_heading("Export Successful")
@@ -479,8 +489,12 @@ class ImportExportMixin:
             return
 
         try:
-            # Restore from the selected file using SQLite backup API
-            src = sqlite3.connect(path)
+            # Open the backup file as immutable so SQLite won't try to
+            # create -wal/-shm files next to it (the path may live on a
+            # read-only Flatpak portal mount).
+            from urllib.parse import quote
+            uri = f"file:{quote(path, safe='/')}?immutable=1"
+            src = sqlite3.connect(uri, uri=True)
             src.backup(self.db.conn)
             src.close()
 
