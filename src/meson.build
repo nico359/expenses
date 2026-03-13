@@ -30,6 +30,9 @@ expenses_sources = [
   '__init__.py',
   'main.py',
   'db.py',
+  'accounts.py',
+  'expenses.py',
+  'importexport.py',
   'window.py',
 ]
 
