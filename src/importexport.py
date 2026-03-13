@@ -356,9 +356,9 @@ class ImportExportMixin:
                 ).fetchall()
 
                 for amount, payee, note, date_str, is_income in rows:
+                    # amount already carries the correct sign (negative
+                    # for expenses, positive for income) – just scale.
                     amount_cents = round(amount * 100)
-                    if not is_income:
-                        amount_cents = -amount_cents
 
                     try:
                         dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M')
