@@ -252,7 +252,7 @@ class ImportExportMixin:
 
         now = datetime.now()
         dialog.set_initial_name(
-            f"myexpenses-backup-{now.strftime('%Y%m%d-%H%M%S')}.zip"
+            f"expenses-export-{now.strftime('%Y%m%d-%H%M%S')}.zip"
         )
 
         filters = Gio.ListStore.new(Gtk.FileFilter)
