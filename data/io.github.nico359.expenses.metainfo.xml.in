@@ -14,9 +14,9 @@
     <name>nico359</name>
   </developer>
 
-  <url type="homepage">https://github.com/nico359/expenses-rs</url>
-  <url type="vcs-browser">https://github.com/nico359/expenses-rs</url>
-  <url type="bugtracker">https://github.com/nico359/expenses-rs/issues</url>
+  <url type="homepage">https://github.com/nico359/expenses</url>
+  <url type="vcs-browser">https://github.com/nico359/expenses</url>
+  <url type="bugtracker">https://github.com/nico359/expenses/issues</url>
 
   <translation type="gettext">expenses</translation>
   <launchable type="desktop-id">io.github.nico359.expenses.desktop</launchable>
