@@ -595,6 +595,8 @@ impl ExpensesWindow {
 
         for rec in &recurring {
             let mut next_date = rec.last_generated.clone();
+            let mut last_actually_generated: Option<String> = None;
+
             loop {
                 next_date = Self::add_frequency(&next_date, &rec.frequency);
                 let next_date_str = &next_date[..10]; // "YYYY-MM-DD"
@@ -614,9 +616,19 @@ impl ExpensesWindow {
                         &datetime, rec.is_income, false, Some(&rec.id),
                     ).ok();
                 }
+
+                // Track the last scheduled date we processed (whether or not
+                // the expense already existed) so that last_generated advances
+                // along the schedule instead of drifting to today.
+                last_actually_generated = Some(next_date_str.to_string());
             }
 
-            self.db().update_recurring_last_generated(&rec.id, &today).ok();
+            // Only advance last_generated to the last scheduled date we
+            // reached, NOT to today.  This prevents the schedule from
+            // drifting when the app is opened daily.
+            if let Some(ref gen_date) = last_actually_generated {
+                self.db().update_recurring_last_generated(&rec.id, gen_date).ok();
+            }
         }
     }
 
@@ -709,12 +721,15 @@ impl ExpensesWindow {
 
         if let Some(expense) = expense {
             let rec_id = uuid::Uuid::new_v4().to_string();
-            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+            // Use the expense's own date as start_date and last_generated
+            // so the recurring schedule is anchored to the original expense,
+            // not to when the user happened to press "make recurring".
+            let expense_date = &expense.date[..10]; // "YYYY-MM-DD"
 
             self.db().add_recurring_expense(
                 &rec_id, expense.account_id, expense.amount, &expense.payee,
-                &expense.note, expense.is_income, frequency, &today,
-                end_date, &today,
+                &expense.note, expense.is_income, frequency, expense_date,
+                end_date, expense_date,
             ).ok();
 
             // Update the original expense to link it
