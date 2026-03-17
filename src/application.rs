@@ -1,6 +1,6 @@
 /* application.rs
  *
- * Copyright 2026 Unknown
+ * Copyright 2026 nico359
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,22 +24,22 @@ use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
 use crate::config::VERSION;
-use crate::ExpensesRsWindow;
+use crate::ExpensesWindow;
 
 mod imp {
     use super::*;
 
     #[derive(Debug, Default)]
-    pub struct ExpensesRsApplication {}
+    pub struct ExpensesApplication {}
 
     #[glib::object_subclass]
-    impl ObjectSubclass for ExpensesRsApplication {
-        const NAME: &'static str = "ExpensesRsApplication";
-        type Type = super::ExpensesRsApplication;
+    impl ObjectSubclass for ExpensesApplication {
+        const NAME: &'static str = "ExpensesApplication";
+        type Type = super::ExpensesApplication;
         type ParentType = adw::Application;
     }
 
-    impl ObjectImpl for ExpensesRsApplication {
+    impl ObjectImpl for ExpensesApplication {
         fn constructed(&self) {
             self.parent_constructed();
             let obj = self.obj();
@@ -48,35 +48,28 @@ mod imp {
         }
     }
 
-    impl ApplicationImpl for ExpensesRsApplication {
-        // We connect to the activate callback to create a window when the application
-        // has been launched. Additionally, this callback notifies us when the user
-        // tries to launch a "second instance" of the application. When they try
-        // to do that, we'll just present any existing window.
+    impl ApplicationImpl for ExpensesApplication {
         fn activate(&self) {
             let application = self.obj();
-            // Get the current window or create one if necessary
             let window = application.active_window().unwrap_or_else(|| {
-                let window = ExpensesRsWindow::new(&*application);
+                let window = ExpensesWindow::new(&*application);
                 window.upcast()
             });
-
-            // Ask the window manager/compositor to present the window
             window.present();
         }
     }
 
-    impl GtkApplicationImpl for ExpensesRsApplication {}
-    impl AdwApplicationImpl for ExpensesRsApplication {}
+    impl GtkApplicationImpl for ExpensesApplication {}
+    impl AdwApplicationImpl for ExpensesApplication {}
 }
 
 glib::wrapper! {
-    pub struct ExpensesRsApplication(ObjectSubclass<imp::ExpensesRsApplication>)
+    pub struct ExpensesApplication(ObjectSubclass<imp::ExpensesApplication>)
         @extends gio::Application, gtk::Application, adw::Application,
         @implements gio::ActionGroup, gio::ActionMap;
 }
 
-impl ExpensesRsApplication {
+impl ExpensesApplication {
     pub fn new(application_id: &str, flags: &gio::ApplicationFlags) -> Self {
         glib::Object::builder()
             .property("application-id", application_id)
@@ -98,14 +91,13 @@ impl ExpensesRsApplication {
     fn show_about(&self) {
         let window = self.active_window().unwrap();
         let about = adw::AboutDialog::builder()
-            .application_name("expenses-rs")
+            .application_name("Expenses")
             .application_icon("io.github.nico359.expenses")
-            .developer_name("Unknown")
+            .developer_name("nico359")
             .version(VERSION)
-            .developers(vec!["Unknown"])
-            // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
+            .developers(vec!["nico359"])
             .translator_credits(&gettext("translator-credits"))
-            .copyright("© 2026 Unknown")
+            .copyright("© 2026 nico359")
             .build();
 
         about.present(Some(&window));

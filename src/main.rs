@@ -1,6 +1,6 @@
 /* main.rs
  *
- * Copyright 2026 Unknown
+ * Copyright 2026 nico359
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +20,12 @@
 
 mod application;
 mod config;
+mod db;
+mod import_export;
 mod window;
 
-use self::application::ExpensesRsApplication;
-use self::window::ExpensesRsWindow;
+use self::application::ExpensesApplication;
+use self::window::ExpensesWindow;
 
 use config::{GETTEXT_PACKAGE, LOCALEDIR, PKGDATADIR};
 use gettextrs::{bind_textdomain_codeset, bindtextdomain, textdomain};
@@ -38,14 +40,14 @@ fn main() -> glib::ExitCode {
     textdomain(GETTEXT_PACKAGE).expect("Unable to switch to the text domain");
 
     // Load resources
-    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/expenses-rs.gresource")
+    let resources = gio::Resource::load(PKGDATADIR.to_owned() + "/expenses.gresource")
         .expect("Could not load resources");
     gio::resources_register(&resources);
 
     // Create a new GtkApplication. The application manages our main loop,
     // application windows, integration with the window manager/compositor, and
     // desktop features such as file opening and single-instance applications.
-    let app = ExpensesRsApplication::new("io.github.nico359.expenses", &gio::ApplicationFlags::empty());
+    let app = ExpensesApplication::new("io.github.nico359.expenses", &gio::ApplicationFlags::empty());
 
     // Run the application. This function will block until the application
     // exits. Upon return, we have our exit code to return to the shell. (This

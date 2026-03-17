@@ -1,10 +1,10 @@
 [Desktop Entry]
-Name=expenses-rs
-Exec=expenses-rs
+Name=Expenses
+Exec=expenses
 Icon=io.github.nico359.expenses
 Terminal=false
 Type=Application
-Categories=Utility;
-Keywords=GTK;
+Categories=Office;Finance;
+Keywords=Expenses;Finance;Money;Budget;
 StartupNotify=true
 DBusActivatable=true

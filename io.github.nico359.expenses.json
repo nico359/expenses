@@ -6,7 +6,7 @@
     "sdk-extensions" : [
         "org.freedesktop.Sdk.Extension.rust-stable"
     ],
-    "command" : "expenses-rs",
+    "command" : "expenses",
     "finish-args" : [
         "--share=network",
         "--share=ipc",
@@ -21,7 +21,7 @@
         ],
         "env" : {
             "RUST_BACKTRACE" : "1",
-            "RUST_LOG" : "expenses-rs=debug"
+            "RUST_LOG" : "expenses=debug"
         }
     },
     "cleanup" : [
@@ -37,13 +37,13 @@
     ],
     "modules" : [
         {
-            "name" : "expenses-rs",
+            "name" : "expenses",
             "builddir" : true,
             "buildsystem" : "meson",
             "sources" : [
                 {
                     "type" : "git",
-                    "url" : "file:///home/nb/Projects"
+                    "url" : "file:///home/nb/Projects/expenses-rs"
                 }
             ]
         }

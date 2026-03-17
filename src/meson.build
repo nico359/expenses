@@ -1,8 +1,8 @@
 pkgdatadir = get_option('prefix') / get_option('datadir') / meson.project_name()
 gnome = import('gnome')
 
-gnome.compile_resources('expenses-rs',
-  'expenses-rs.gresource.xml',
+gnome.compile_resources('expenses',
+  'expenses.gresource.xml',
   gresource_bundle: true,
   install: true,
   install_dir: pkgdatadir,
@@ -10,7 +10,7 @@ gnome.compile_resources('expenses-rs',
 
 conf = configuration_data()
 conf.set_quoted('VERSION', meson.project_version())
-conf.set_quoted('GETTEXT_PACKAGE', 'expenses-rs')
+conf.set_quoted('GETTEXT_PACKAGE', 'expenses')
 conf.set_quoted('LOCALEDIR', get_option('prefix') / get_option('localedir'))
 conf.set_quoted('PKGDATADIR', pkgdatadir)
 

@@ -1,1 +1,1 @@
-i18n.gettext('expenses-rs', preset: 'glib')
+i18n.gettext('expenses', preset: 'glib')

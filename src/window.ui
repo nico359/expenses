@@ -2,10 +2,10 @@
 <interface>
   <requires lib="gtk" version="4.0"/>
   <requires lib="Adw" version="1.0"/>
-  <template class="ExpensesRsWindow" parent="AdwApplicationWindow">
-    <property name="title" translatable="yes">Expenses-rs</property>
-    <property name="default-width">800</property>
-    <property name="default-height">600</property>
+  <template class="ExpensesWindow" parent="AdwApplicationWindow">
+    <property name="title" translatable="yes">Expenses</property>
+    <property name="default-width">600</property>
+    <property name="default-height">700</property>
     <property name="content">
       <object class="AdwToolbarView">
         <child type="top">
@@ -21,11 +21,192 @@
           </object>
         </child>
         <property name="content">
-          <object class="GtkLabel" id="label">
-            <property name="label" translatable="yes">Hello, World!</property>
-            <style>
-              <class name="title-1"/>
-            </style>
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">0</property>
+
+            <!-- Account Selector -->
+            <child>
+              <object class="AdwClamp">
+                <property name="maximum-size">600</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">0</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">6</property>
+
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="label" translatable="yes">Account</property>
+                        <property name="halign">start</property>
+                        <property name="margin-bottom">6</property>
+                        <style>
+                          <class name="heading"/>
+                        </style>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="GtkBox">
+                        <property name="orientation">horizontal</property>
+                        <property name="spacing">6</property>
+                        <child>
+                          <object class="GtkDropDown" id="account_dropdown">
+                            <property name="hexpand">true</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="delete_account_button">
+                            <property name="icon-name">user-trash-symbolic</property>
+                            <property name="tooltip-text" translatable="yes">Delete account</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+
+            <!-- Input Area -->
+            <child>
+              <object class="AdwClamp">
+                <property name="maximum-size">600</property>
+                <property name="child">
+                  <object class="GtkBox">
+                    <property name="orientation">vertical</property>
+                    <property name="spacing">12</property>
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">12</property>
+                    <property name="margin-bottom">12</property>
+
+                    <child>
+                      <object class="AdwPreferencesGroup">
+                        <property name="title" translatable="yes">Add Expense</property>
+                        <child>
+                          <object class="AdwEntryRow" id="amount_entry">
+                            <property name="title" translatable="yes">Amount</property>
+                            <property name="input-purpose">number</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwEntryRow" id="payee_entry">
+                            <property name="title" translatable="yes">Payee</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwEntryRow" id="note_entry">
+                            <property name="title" translatable="yes">Note</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="AdwSwitchRow" id="income_switch">
+                            <property name="title" translatable="yes">Income</property>
+                            <property name="subtitle" translatable="yes">Toggle for income transactions</property>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+
+                    <child>
+                      <object class="GtkButton" id="add_button">
+                        <property name="label" translatable="yes">Add Expense</property>
+                        <property name="halign">center</property>
+                        <style>
+                          <class name="suggested-action"/>
+                          <class name="pill"/>
+                        </style>
+                      </object>
+                    </child>
+                  </object>
+                </property>
+              </object>
+            </child>
+
+            <!-- Separator -->
+            <child>
+              <object class="GtkSeparator">
+                <property name="margin-top">6</property>
+                <property name="margin-bottom">6</property>
+              </object>
+            </child>
+
+            <!-- Total Display -->
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">horizontal</property>
+                <property name="spacing">6</property>
+                <property name="margin-start">18</property>
+                <property name="margin-end">18</property>
+                <property name="margin-top">6</property>
+                <property name="margin-bottom">6</property>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">Total:</property>
+                    <property name="hexpand">true</property>
+                    <property name="halign">start</property>
+                    <style>
+                      <class name="title-3"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkLabel" id="total_label">
+                    <property name="label">0.00 €</property>
+                    <property name="halign">end</property>
+                    <style>
+                      <class name="title-2"/>
+                      <class name="accent"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <!-- Search -->
+            <child>
+              <object class="AdwClamp">
+                <property name="maximum-size">600</property>
+                <property name="child">
+                  <object class="GtkSearchEntry" id="search_entry">
+                    <property name="margin-start">12</property>
+                    <property name="margin-end">12</property>
+                    <property name="margin-top">6</property>
+                    <property name="margin-bottom">6</property>
+                    <property name="placeholder-text" translatable="yes">Search payee...</property>
+                  </object>
+                </property>
+              </object>
+            </child>
+
+            <!-- Expense List -->
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="vexpand">true</property>
+                <property name="hscrollbar-policy">never</property>
+                <child>
+                  <object class="AdwClamp">
+                    <property name="maximum-size">600</property>
+                    <property name="child">
+                      <object class="GtkListBox" id="expense_list">
+                        <property name="margin-start">12</property>
+                        <property name="margin-end">12</property>
+                        <property name="margin-top">12</property>
+                        <property name="margin-bottom">12</property>
+                        <property name="selection-mode">none</property>
+                        <style>
+                          <class name="boxed-list"/>
+                        </style>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </child>
           </object>
         </property>
       </object>
@@ -34,15 +215,31 @@
   <menu id="primary_menu">
     <section>
       <item>
-        <attribute name="label" translatable="yes">_Preferences</attribute>
-        <attribute name="action">app.preferences</attribute>
+        <attribute name="label" translatable="yes">_Import from MyExpenses</attribute>
+        <attribute name="action">win.import-myexpenses</attribute>
       </item>
+      <item>
+        <attribute name="label" translatable="yes">_Export for MyExpenses</attribute>
+        <attribute name="action">win.export-myexpenses</attribute>
+      </item>
+    </section>
+    <section>
+      <item>
+        <attribute name="label" translatable="yes">_Export Database</attribute>
+        <attribute name="action">win.export-db</attribute>
+      </item>
+      <item>
+        <attribute name="label" translatable="yes">_Import Database</attribute>
+        <attribute name="action">win.import-db</attribute>
+      </item>
+    </section>
+    <section>
       <item>
         <attribute name="label" translatable="yes">_Keyboard Shortcuts</attribute>
         <attribute name="action">app.shortcuts</attribute>
       </item>
       <item>
-        <attribute name="label" translatable="yes">_About Expenses-rs</attribute>
+        <attribute name="label" translatable="yes">_About Expenses</attribute>
         <attribute name="action">app.about</attribute>
       </item>
     </section>
