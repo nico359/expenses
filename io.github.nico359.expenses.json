@@ -43,7 +43,8 @@
             "sources" : [
                 {
                     "type" : "git",
-                    "url" : "file:///home/nb/Projects/expenses-rs"
+                    "url" : "file:///home/nb/Projects/expenses-rs",
+                    "branch" : "main"
                 }
             ]
         }
