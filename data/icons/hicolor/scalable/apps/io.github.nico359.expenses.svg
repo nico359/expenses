@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <svg
+   width="128"
+   height="128"
    viewBox="0 0 128 128"
    version="1.1"
-   id="svg14"
+   id="svg9"
    sodipodi:docname="io.github.nico359.expenses.svg"
    inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -10,7 +12,7 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <sodipodi:namedview
-     id="namedview14"
+     id="namedview9"
      pagecolor="#ffffff"
      bordercolor="#000000"
      borderopacity="0.25"
@@ -18,217 +20,156 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="2.32"
-     inkscape:cx="64.439655"
-     inkscape:cy="47.413793"
+     inkscape:zoom="4.2613878"
+     inkscape:cx="39.658442"
+     inkscape:cy="68.756943"
      inkscape:window-width="1280"
      inkscape:window-height="659"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="svg14" />
+     inkscape:current-layer="svg9" />
   <defs
      id="defs1">
-    <!-- Clip banknotes at wallet level -->
     <clipPath
        id="walletClip">
       <rect
          x="0"
          y="0"
          width="128"
-         height="55"
+         height="46"
          id="rect1" />
     </clipPath>
   </defs>
-  <!-- Wallet body (smaller) -->
-  <path
-     d="m 9.3905401,37.627534 v 70.982836 q 0,9.93752 10.6745989,9.93752 h 88.446531 q 10.67479,0 10.67479,-9.93752 V 51.824088 q 0,-14.196554 -10.67479,-14.196554 H 20.065139 q -10.6745989,0 -10.6745989,14.196554 z"
-     fill="#8b6f47"
-     stroke="#5d4e37"
-     stroke-width="2.20408"
-     id="path1" />
-  <!-- Wallet highlight -->
-  <path
-     d="m 12.440423,44.725807 v 8.517929 q 0,2.839313 4.422474,2.839313 h 94.346163 q 4.42239,0 4.42239,-2.839313 v -8.517929 q 0,-2.83931 -4.42239,-2.83931 H 16.862897 q -4.422474,0 -4.422474,2.83931 z"
-     fill="#a0845f"
-     opacity="0.6"
-     id="path2"
-     style="stroke-width:1.44667" />
-  <!-- Dollar sign on wallet -->
-  <g
-     transform="matrix(1.5249426,0,0,1.4196553,64.288482,75.958246)"
-     id="g4">
-    <line
-       x1="0"
-       y1="-7"
-       x2="0"
-       y2="7"
-       stroke="#d4af37"
-       stroke-width="1.5"
-       stroke-linecap="round"
-       id="line2" />
-    <path
-       d="m -5,-3 q 0,-2 3,-2 h 4 q 3,0 3,2 0,2 -3,2 h -4"
-       fill="none"
-       stroke="#d4af37"
-       stroke-width="1.5"
-       stroke-linecap="round"
-       stroke-linejoin="round"
-       id="path3" />
-    <path
-       d="m -5,1 q 0,2 3,2 H 2 Q 5,3 5,5 5,7 2,7 h -4"
-       fill="none"
-       stroke="#d4af37"
-       stroke-width="1.5"
-       stroke-linecap="round"
-       stroke-linejoin="round"
-       id="path4" />
-  </g>
-  <!-- Banknotes clipped at wallet level -->
+  <!-- Banknotes sticking out of wallet (all green) -->
   <g
      clip-path="url(#walletClip)"
-     id="g14"
-     transform="matrix(1.5249426,0,0,1.4196553,-33.307866,-40.45353)">
-    <!-- Third banknote (orange) - slightly more horizontal -->
-    <g
-       transform="rotate(64,-26.0092,56.306022)"
-       id="g7">
-      <rect
-         x="0"
-         y="-48"
-         width="24"
-         height="48"
-         rx="2"
-         fill="#ff9800"
-         stroke="#e65100"
-         stroke-width="1.5"
-         id="rect4" />
-      <rect
-         x="3"
-         y="-43"
-         width="18"
-         height="33"
-         fill="#ffb74d"
-         opacity="0.7"
-         id="rect5" />
-      <line
-         x1="8"
-         y1="-30"
-         x2="16"
-         y2="-30"
-         stroke="#e65100"
-         stroke-width="1"
-         id="line5" />
-      <line
-         x1="8"
-         y1="-20"
-         x2="16"
-         y2="-20"
-         stroke="#e65100"
-         stroke-width="1"
-         id="line6" />
-      <line
-         x1="8"
-         y1="-10"
-         x2="16"
-         y2="-10"
-         stroke="#e65100"
-         stroke-width="1"
-         id="line7" />
-    </g>
-    <!-- Second banknote (blue) - slightly more horizontal -->
-    <g
-       transform="rotate(68,-22.770427,54.186097)"
-       id="g10">
-      <rect
-         x="0"
-         y="-45"
-         width="24"
-         height="45"
-         rx="2"
-         fill="#2196f3"
-         stroke="#1565c0"
-         stroke-width="1.5"
-         id="rect7" />
-      <rect
-         x="3"
-         y="-40"
-         width="18"
-         height="30"
-         fill="#64b5f6"
-         opacity="0.7"
-         id="rect8" />
-      <line
-         x1="8"
-         y1="-28"
-         x2="16"
-         y2="-28"
-         stroke="#1565c0"
-         stroke-width="1"
-         id="line8" />
-      <line
-         x1="8"
-         y1="-19"
-         x2="16"
-         y2="-19"
-         stroke="#1565c0"
-         stroke-width="1"
-         id="line9" />
-      <line
-         x1="8"
-         y1="-10"
-         x2="16"
-         y2="-10"
-         stroke="#1565c0"
-         stroke-width="1"
-         id="line10" />
-    </g>
-    <!-- First banknote (green) - almost horizontal, front -->
-    <g
-       transform="rotate(72,-19.850503,52.274875)"
-       id="g13">
-      <rect
-         x="0"
-         y="-40"
-         width="24"
-         height="40"
-         rx="2"
-         fill="#4caf50"
-         stroke="#2e7d32"
-         stroke-width="1.5"
-         id="rect10" />
-      <rect
-         x="3"
-         y="-35"
-         width="18"
-         height="25"
-         fill="#66bb6a"
-         opacity="0.7"
-         id="rect11" />
-      <line
-         x1="8"
-         y1="-25"
-         x2="16"
-         y2="-25"
-         stroke="#2e7d32"
-         stroke-width="1"
-         id="line11" />
-      <line
-         x1="8"
-         y1="-17"
-         x2="16"
-         y2="-17"
-         stroke="#2e7d32"
-         stroke-width="1"
-         id="line12" />
-      <line
-         x1="8"
-         y1="-9"
-         x2="16"
-         y2="-9"
-         stroke="#2e7d32"
-         stroke-width="1"
-         id="line13" />
-    </g>
+     id="g7">
+    <rect
+       x="24"
+       y="8"
+       width="40"
+       height="56"
+       rx="3"
+       transform="rotate(-18 44 36)"
+       fill="#57e389"
+       stroke="#2ec27e"
+       stroke-width="1.5"
+       id="rect2" />
+    <line
+       x1="34"
+       y1="22"
+       x2="54"
+       y2="22"
+       transform="rotate(-18 44 36)"
+       stroke="#2ec27e"
+       stroke-width="1"
+       opacity="0.5"
+       id="line2" />
+    <line
+       x1="34"
+       y1="32"
+       x2="54"
+       y2="32"
+       transform="rotate(-18 44 36)"
+       stroke="#2ec27e"
+       stroke-width="1"
+       opacity="0.5"
+       id="line3" />
+    <rect
+       x="44"
+       y="4"
+       width="40"
+       height="56"
+       rx="3"
+       transform="rotate(-6 64 32)"
+       fill="#57e389"
+       stroke="#2ec27e"
+       stroke-width="1.5"
+       id="rect3" />
+    <line
+       x1="54"
+       y1="18"
+       x2="74"
+       y2="18"
+       transform="rotate(-6 64 32)"
+       stroke="#2ec27e"
+       stroke-width="1"
+       opacity="0.5"
+       id="line4" />
+    <line
+       x1="54"
+       y1="28"
+       x2="74"
+       y2="28"
+       transform="rotate(-6 64 32)"
+       stroke="#2ec27e"
+       stroke-width="1"
+       opacity="0.5"
+       id="line5" />
+    <rect
+       x="62"
+       y="6"
+       width="40"
+       height="56"
+       rx="3"
+       transform="rotate(8 82 34)"
+       fill="#57e389"
+       stroke="#2ec27e"
+       stroke-width="1.5"
+       id="rect5" />
+    <line
+       x1="72"
+       y1="20"
+       x2="92"
+       y2="20"
+       transform="rotate(8 82 34)"
+       stroke="#2ec27e"
+       stroke-width="1"
+       opacity="0.5"
+       id="line6" />
+    <line
+       x1="72"
+       y1="30"
+       x2="92"
+       y2="30"
+       transform="rotate(8 82 34)"
+       stroke="#2ec27e"
+       stroke-width="1"
+       opacity="0.5"
+       id="line7" />
   </g>
+  <!-- Wallet body -->
+  <rect
+     x="10"
+     y="40"
+     width="108"
+     height="78"
+     rx="12"
+     fill="#8b6f47"
+     stroke="#5d4e37"
+     stroke-width="2.5"
+     id="rect7" />
+  <!-- Wallet flap highlight -->
+  <rect
+     x="12.564102"
+     y="42.564102"
+     width="102.70087"
+     height="18"
+     rx="11.411206"
+     fill="#a0845f"
+     opacity="0.5"
+     id="rect8"
+     style="stroke-width:0.975159" />
+  <!-- Wallet clasp -->
+  <rect
+     x="52"
+     y="36"
+     width="24"
+     height="12"
+     rx="6"
+     fill="#d4af37"
+     stroke="#b8960c"
+     stroke-width="1.5"
+     id="rect9" />
 </svg>
