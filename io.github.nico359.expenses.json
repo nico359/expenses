@@ -20,8 +20,7 @@
             "--share=network"
         ],
         "env" : {
-            "RUST_BACKTRACE" : "1",
-            "RUST_LOG" : "expenses=debug"
+            "CARGO_HOME" : "/run/build/expenses/cargo"
         }
     },
     "cleanup" : [
@@ -40,6 +39,7 @@
             "name" : "expenses",
             "builddir" : true,
             "buildsystem" : "meson",
+            "config-opts" : ["-Dbuildtype=release"],
             "sources" : [
                 {
                     "type" : "git",
