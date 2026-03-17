@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=expenses-rs
+Exec=expenses-rs
+Icon=io.github.nico359.expenses
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=GTK;
+StartupNotify=true
+DBusActivatable=true
