@@ -594,6 +594,15 @@ class ExpensesWindow(Adw.ApplicationWindow):
             recurring_button.set_icon_name('window-close-symbolic')
             recurring_button.set_tooltip_text('Stop recurring')
             recurring_button.connect('clicked', self.on_stop_recurring, index)
+            
+            # Add edit button for recurring expenses
+            edit_button = Gtk.Button()
+            edit_button.set_icon_name('document-edit-symbolic')
+            edit_button.set_tooltip_text('Edit recurring')
+            edit_button.set_valign(Gtk.Align.CENTER)
+            edit_button.add_css_class('flat')
+            edit_button.connect('clicked', self.on_edit_recurring, index)
+            row.add_suffix(edit_button)
         else:
             recurring_button.set_icon_name('view-refresh-symbolic')
             recurring_button.set_tooltip_text('Make recurring')
@@ -733,6 +742,92 @@ class ExpensesWindow(Adw.ApplicationWindow):
                 confirm_dialog = Adw.MessageDialog.new(self)
                 confirm_dialog.set_heading("Recurring Created")
                 confirm_dialog.set_body(f"{expense['payee']} is now recurring ({frequency.capitalize()})")
+                confirm_dialog.add_response("ok", "OK")
+                confirm_dialog.present()
+        
+        dialog.connect('response', on_response)
+        dialog.present()
+    
+    def on_edit_recurring(self, button, index):
+        """Show dialog to edit a recurring expense interval"""
+        expenses = self.get_current_expenses()
+        if not (0 <= index < len(expenses)):
+            return
+        
+        expense = expenses[index]
+        recurring_id = expense.get('recurring_id')
+        if not recurring_id:
+            return
+        
+        # Find the recurring definition
+        recurring = None
+        for r in self.data.get('recurring_expenses', []):
+            if r.get('id') == recurring_id:
+                recurring = r
+                break
+        
+        if not recurring:
+            return
+        
+        # Create a dialog for editing recurring setup
+        dialog = Adw.MessageDialog.new(self)
+        dialog.set_heading("Edit Recurring")
+        dialog.set_body(f"Change interval for {expense['payee']}?")
+        dialog.add_response("cancel", "Cancel")
+        dialog.add_response("ok", "Update")
+        dialog.set_default_response("ok")
+        dialog.set_response_appearance("ok", Adw.ResponseAppearance.SUGGESTED)
+        
+        # Create frequency selector using ComboBoxText
+        frequency_combo = Gtk.ComboBoxText()
+        for freq in ['Daily', 'Weekly', 'Monthly', 'Yearly']:
+            frequency_combo.append_text(freq)
+        
+        # Set current frequency
+        current_frequency = recurring.get('frequency', 'monthly').capitalize()
+        for i, freq in enumerate(['Daily', 'Weekly', 'Monthly', 'Yearly']):
+            if freq == current_frequency:
+                frequency_combo.set_active(i)
+                break
+        
+        # Create end date entry
+        end_date_entry = Gtk.Entry()
+        end_date_entry.set_placeholder_text("YYYY-MM-DD (optional)")
+        if recurring.get('end_date'):
+            end_date_entry.set_text(recurring['end_date'])
+        
+        # Create a box for inputs
+        input_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        input_box.set_spacing(12)
+        input_box.set_margin_top(12)
+        input_box.append(Gtk.Label(label="Frequency:", xalign=0))
+        input_box.append(frequency_combo)
+        input_box.append(Gtk.Label(label="End Date (optional):", xalign=0))
+        input_box.append(end_date_entry)
+        
+        dialog.set_extra_child(input_box)
+        
+        def on_response(dialog, response):
+            if response == "ok":
+                # Get selected frequency
+                frequency_index = frequency_combo.get_active()
+                frequencies = ['daily', 'weekly', 'monthly', 'yearly']
+                frequency = frequencies[frequency_index] if frequency_index >= 0 else 'monthly'
+                
+                # Get end date
+                end_date = end_date_entry.get_text().strip()
+                
+                # Update recurring definition (does not affect past expenses)
+                recurring['frequency'] = frequency
+                recurring['end_date'] = end_date if end_date else None
+                
+                self.save_data()
+                self.update_expense_list()
+                
+                # Show confirmation
+                confirm_dialog = Adw.MessageDialog.new(self)
+                confirm_dialog.set_heading("Recurring Updated")
+                confirm_dialog.set_body(f"{expense['payee']} interval changed to {frequency.capitalize()}")
                 confirm_dialog.add_response("ok", "OK")
                 confirm_dialog.present()
         
