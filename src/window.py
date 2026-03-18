@@ -649,8 +649,11 @@ class ExpensesWindow(Adw.ApplicationWindow):
                     if r.get('id') != recurring_id
                 ]
                 
-                # Remove recurring_id from this expense
-                expense.pop('recurring_id', None)
+                # Remove recurring_id from ALL expenses with this recurring_id
+                for account_expenses in self.data['expenses'].values():
+                    for exp in account_expenses:
+                        if exp.get('recurring_id') == recurring_id:
+                            exp.pop('recurring_id', None)
                 
                 self.save_data()
                 self.update_expense_list()
