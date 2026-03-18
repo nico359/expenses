@@ -11,7 +11,7 @@ My motivation behind this one was that I like using the MyExpenses app from Mich
 - Track expenses and income across multiple accounts
 - Recurring expenses (daily, weekly, monthly, yearly)
 - Search transactions by payee or note
-- Import/export from the Android [MyExpenses](https://github.com/mtotschnig/MyExpenses) app
+- Import/export from the Android [MyExpenses](https://github.com/mtotschnig/MyExpenses) app (export might not work, havent tested it yet)
 - Database backup and restore
 - Adaptive UI for mobile and desktop
 
