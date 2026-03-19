@@ -334,7 +334,7 @@ impl ExpensesWindow {
             .build();
         popover.set_parent(&*self.imp().payee_entry);
 
-        // Select suggestion on row activation
+        // Select suggestion on row activation — auto-fill amount and note
         suggestion_list.connect_row_activated(glib::clone!(
             #[weak(rename_to = window)]
             self,
@@ -342,10 +342,25 @@ impl ExpensesWindow {
             popover,
             move |_, row| {
                 if let Some(label) = row.child().and_then(|c| c.downcast::<gtk::Label>().ok()) {
-                    window.imp().payee_entry.set_text(&label.text());
-                    // Move cursor to end
-                    let len = label.text().len() as i32;
+                    let payee = label.text().to_string();
+                    window.imp().payee_entry.set_text(&payee);
+                    let len = payee.len() as i32;
                     window.imp().payee_entry.select_region(len, len);
+
+                    // Auto-fill from last expense with this payee
+                    let account_id = *window.imp().current_account_id.borrow();
+                    if let Ok(Some((amount, note, is_income))) =
+                        window.db().get_last_expense_for_payee(account_id, &payee)
+                    {
+                        let amount_str = if amount.fract() == 0.0 {
+                            format!("{:.0}", amount)
+                        } else {
+                            format!("{:.2}", amount)
+                        };
+                        window.imp().amount_entry.set_text(&amount_str);
+                        window.imp().note_entry.set_text(&note);
+                        window.imp().income_switch.set_active(is_income);
+                    }
                 }
                 popover.popdown();
             }

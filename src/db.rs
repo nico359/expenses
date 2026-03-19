@@ -18,7 +18,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use rusqlite::{params, Connection, Result};
+use rusqlite::{params, Connection, OptionalExtension, Result};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -319,6 +319,19 @@ impl Database {
         let payees = stmt.query_map(params![account_id], |row| row.get(0))?
             .collect::<Result<Vec<_>>>()?;
         Ok(payees)
+    }
+
+    /// Get the most recent expense for a given payee (for auto-fill).
+    pub fn get_last_expense_for_payee(&self, account_id: i64, payee: &str) -> Result<Option<(f64, String, bool)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT amount, note, is_income FROM expenses \
+             WHERE account_id = ?1 AND payee = ?2 COLLATE NOCASE \
+             ORDER BY date DESC LIMIT 1"
+        )?;
+        let result = stmt.query_row(params![account_id, payee], |row| {
+            Ok((row.get::<_, f64>(0)?, row.get::<_, String>(1)?, row.get::<_, bool>(2)?))
+        }).optional()?;
+        Ok(result)
     }
 
     pub fn expense_exists_on_date(

@@ -88,14 +88,14 @@
                       <object class="AdwPreferencesGroup">
                         <property name="title" translatable="yes">Add Expense</property>
                         <child>
-                          <object class="AdwEntryRow" id="amount_entry">
-                            <property name="title" translatable="yes">Amount</property>
-                            <property name="input-purpose">number</property>
+                          <object class="AdwEntryRow" id="payee_entry">
+                            <property name="title" translatable="yes">Payee</property>
                           </object>
                         </child>
                         <child>
-                          <object class="AdwEntryRow" id="payee_entry">
-                            <property name="title" translatable="yes">Payee</property>
+                          <object class="AdwEntryRow" id="amount_entry">
+                            <property name="title" translatable="yes">Amount</property>
+                            <property name="input-purpose">number</property>
                           </object>
                         </child>
                         <child>
