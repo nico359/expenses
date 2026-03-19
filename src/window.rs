@@ -23,7 +23,7 @@ use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 
 use crate::db::Database;
 
@@ -58,6 +58,8 @@ mod imp {
         pub current_account_id: RefCell<i64>,
         pub current_offset: RefCell<i64>,
         pub all_payees: RefCell<Vec<String>>,
+        pub payee_popover: OnceCell<gtk::Popover>,
+        pub payee_suggestion_list: OnceCell<gtk::ListBox>,
     }
 
     impl Default for ExpensesWindow {
@@ -77,6 +79,8 @@ mod imp {
                 current_account_id: RefCell::new(0),
                 current_offset: RefCell::new(0),
                 all_payees: RefCell::new(Vec::new()),
+                payee_popover: OnceCell::new(),
+                payee_suggestion_list: OnceCell::new(),
             }
         }
     }
@@ -103,6 +107,7 @@ mod imp {
             obj.init_db();
             obj.setup_actions();
             obj.setup_accounts();
+            obj.setup_payee_autocomplete();
             obj.setup_signals();
             obj.process_recurring_expenses();
             obj.refresh_expenses();
@@ -308,6 +313,56 @@ impl ExpensesWindow {
     }
 
     // --- Expense Management ---
+
+    fn setup_payee_autocomplete(&self) {
+        let suggestion_list = gtk::ListBox::new();
+        suggestion_list.set_selection_mode(gtk::SelectionMode::Single);
+
+        let scrollable = gtk::ScrolledWindow::builder()
+            .max_content_height(250)
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vscrollbar_policy(gtk::PolicyType::Automatic)
+            .propagate_natural_height(true)
+            .child(&suggestion_list)
+            .build();
+
+        let popover = gtk::Popover::builder()
+            .child(&scrollable)
+            .position(gtk::PositionType::Bottom)
+            .has_arrow(false)
+            .autohide(false)
+            .build();
+        popover.set_parent(&*self.imp().payee_entry);
+
+        // Select suggestion on row activation
+        suggestion_list.connect_row_activated(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            #[weak]
+            popover,
+            move |_, row| {
+                if let Some(label) = row.child().and_then(|c| c.downcast::<gtk::Label>().ok()) {
+                    window.imp().payee_entry.set_text(&label.text());
+                    // Move cursor to end
+                    let len = label.text().len() as i32;
+                    window.imp().payee_entry.select_region(len, len);
+                }
+                popover.popdown();
+            }
+        ));
+
+        // Hide suggestions when entry loses focus
+        let focus_controller = gtk::EventControllerFocus::new();
+        focus_controller.connect_leave(glib::clone!(
+            #[weak]
+            popover,
+            move |_| { popover.popdown(); }
+        ));
+        self.imp().payee_entry.add_controller(focus_controller);
+
+        self.imp().payee_popover.set(popover).ok();
+        self.imp().payee_suggestion_list.set(suggestion_list).ok();
+    }
 
     fn setup_signals(&self) {
         // Add button
@@ -583,8 +638,48 @@ impl ExpensesWindow {
     }
 
     fn update_payee_suggestions(&self) {
-        // Payee autocomplete is handled via popover in a future refinement
-        // For now the payee list is cached for potential use
+        let Some(popover) = self.imp().payee_popover.get() else { return };
+        let Some(list) = self.imp().payee_suggestion_list.get() else { return };
+
+        let text = self.imp().payee_entry.text().trim().to_string();
+
+        // Clear existing suggestions
+        while let Some(child) = list.first_child() {
+            list.remove(&child);
+        }
+
+        if text.is_empty() {
+            popover.popdown();
+            return;
+        }
+
+        let text_lower = text.to_lowercase();
+        let payees = self.imp().all_payees.borrow();
+        let matches: Vec<&String> = payees.iter()
+            .filter(|p| p.to_lowercase().contains(&text_lower))
+            .collect();
+
+        if matches.is_empty() {
+            popover.popdown();
+            return;
+        }
+
+        for payee in &matches {
+            let label = gtk::Label::builder()
+                .label(payee.as_str())
+                .xalign(0.0)
+                .margin_start(12)
+                .margin_end(12)
+                .margin_top(8)
+                .margin_bottom(8)
+                .build();
+            let row = gtk::ListBoxRow::builder()
+                .child(&label)
+                .build();
+            list.append(&row);
+        }
+
+        popover.popup();
     }
 
     // --- Recurring Expenses ---
