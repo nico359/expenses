@@ -295,6 +295,39 @@ impl Database {
         Ok(())
     }
 
+    pub fn update_expense(
+        &self,
+        expense_id: i64,
+        amount: f64,
+        payee: &str,
+        note: &str,
+        date: &str,
+        is_income: bool,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE expenses SET amount = ?1, payee = ?2, note = ?3, \
+             date = ?4, is_income = ?5 WHERE id = ?6",
+            params![amount, payee, note, date, is_income, expense_id],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_recurring_details(
+        &self,
+        id: &str,
+        amount: f64,
+        payee: &str,
+        note: &str,
+        is_income: bool,
+    ) -> Result<()> {
+        self.conn.execute(
+            "UPDATE recurring_expenses SET amount = ?1, payee = ?2, \
+             note = ?3, is_income = ?4 WHERE id = ?5",
+            params![amount, payee, note, is_income, id],
+        )?;
+        Ok(())
+    }
+
     pub fn get_balance(&self, account_id: i64) -> Result<f64> {
         let income: f64 = self.conn.query_row(
             "SELECT COALESCE(SUM(amount), 0) FROM expenses \

@@ -572,8 +572,17 @@ impl ExpensesWindow {
         let row = adw::ActionRow::builder()
             .title(&title)
             .subtitle(&subtitle)
+            .activatable(true)
             .build();
         row.add_suffix(&amount_label);
+
+        // Click row to edit
+        let expense_clone = expense.clone();
+        row.connect_activated(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| { window.show_edit_expense_dialog(&expense_clone); }
+        ));
 
         // Action buttons box
         let btn_box = gtk::Box::builder()
@@ -650,6 +659,112 @@ impl ExpensesWindow {
 
         row.add_suffix(&btn_box);
         row
+    }
+
+    fn show_edit_expense_dialog(&self, expense: &crate::db::Expense) {
+        let dialog = adw::AlertDialog::builder()
+            .heading("Edit Expense")
+            .build();
+        dialog.add_response("cancel", "Cancel");
+        dialog.add_response("save", "Save");
+        dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+
+        let vbox = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(8)
+            .build();
+
+        let group = adw::PreferencesGroup::new();
+
+        let payee_row = adw::EntryRow::builder()
+            .title("Payee")
+            .text(&expense.payee)
+            .build();
+        group.add(&payee_row);
+
+        let amount_row = adw::EntryRow::builder()
+            .title("Amount")
+            .text(&format!("{:.2}", expense.amount))
+            .input_purpose(gtk::InputPurpose::Number)
+            .build();
+        group.add(&amount_row);
+
+        let note_row = adw::EntryRow::builder()
+            .title("Note")
+            .text(&expense.note)
+            .build();
+        group.add(&note_row);
+
+        // Date: split into date and time
+        let date_part = if expense.date.len() >= 10 { &expense.date[..10] } else { &expense.date };
+        let time_part = if expense.date.len() >= 16 { &expense.date[11..16] } else { "12:00" };
+
+        let date_row = adw::EntryRow::builder()
+            .title("Date (YYYY-MM-DD)")
+            .text(date_part)
+            .build();
+        group.add(&date_row);
+
+        let time_row = adw::EntryRow::builder()
+            .title("Time (HH:MM)")
+            .text(time_part)
+            .build();
+        group.add(&time_row);
+
+        let income_row = adw::SwitchRow::builder()
+            .title("Income")
+            .active(expense.is_income)
+            .build();
+        group.add(&income_row);
+
+        vbox.append(&group);
+        dialog.set_extra_child(Some(&vbox));
+
+        let expense_id = expense.id;
+        let recurring_id = expense.recurring_id.clone();
+
+        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |response| {
+                if response != "save" {
+                    return;
+                }
+
+                let amount_text = amount_row.text().replace(',', ".");
+                let amount: f64 = match amount_text.parse() {
+                    Ok(v) if v > 0.0 => v,
+                    _ => return,
+                };
+
+                let payee = payee_row.text().trim().to_string();
+                let note = note_row.text().trim().to_string();
+                let date = date_row.text().trim().to_string();
+                let time = time_row.text().trim().to_string();
+                let is_income = income_row.is_active();
+
+                // Validate date format
+                if date.len() != 10 || date.chars().nth(4) != Some('-') {
+                    return;
+                }
+
+                let full_date = if time.is_empty() {
+                    format!("{} 12:00", date)
+                } else {
+                    format!("{} {}", date, time)
+                };
+
+                // Update the expense
+                window.db().update_expense(expense_id, amount, &payee, &note, &full_date, is_income).ok();
+
+                // If recurring, update the template so future instances use new values
+                if let Some(ref rec_id) = recurring_id {
+                    window.db().update_recurring_details(rec_id, amount, &payee, &note, is_income).ok();
+                }
+
+                window.refresh_expenses();
+            }
+        ));
     }
 
     fn update_payee_suggestions(&self) {
