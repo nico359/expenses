@@ -861,6 +861,21 @@ impl ExpensesWindow {
         let date = chrono::NaiveDate::parse_from_str(&date_str[..10], "%Y-%m-%d")
             .unwrap_or_else(|_| chrono::Local::now().date_naive());
 
+        // Handle "Xm" format (every X months)
+        if let Some(n_str) = frequency.strip_suffix('m') {
+            if let Ok(n) = n_str.parse::<u32>() {
+                let total = date.month0() + n;
+                let new_year = date.year() + (total / 12) as i32;
+                let new_month = total % 12 + 1;
+                let max_day = days_in_month(new_year, new_month);
+                let day = date.day().min(max_day);
+                return chrono::NaiveDate::from_ymd_opt(new_year, new_month, day)
+                    .unwrap_or(date)
+                    .format("%Y-%m-%d")
+                    .to_string();
+            }
+        }
+
         let new_date = match frequency {
             "daily" => date + chrono::Duration::days(1),
             "weekly" => date + chrono::Duration::days(7),
@@ -903,12 +918,26 @@ impl ExpensesWindow {
             .spacing(12)
             .build();
 
-        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly"]);
+        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly", "Every N months"]);
         let freq_dropdown = gtk::DropDown::builder()
             .model(&freq_list)
             .selected(2) // Monthly default
             .build();
         vbox.append(&freq_dropdown);
+
+        let months_adj = gtk::Adjustment::new(3.0, 2.0, 120.0, 1.0, 1.0, 0.0);
+        let months_spin = gtk::SpinButton::new(Some(&months_adj), 1.0, 0);
+        months_spin.set_sensitive(false);
+        months_spin.set_tooltip_text(Some("Number of months between occurrences"));
+        vbox.append(&months_spin);
+
+        freq_dropdown.connect_notify_local(Some("selected"), glib::clone!(
+            #[weak]
+            months_spin,
+            move |dropdown, _| {
+                months_spin.set_sensitive(dropdown.selected() == 4);
+            }
+        ));
 
         let end_row = adw::EntryRow::builder()
             .title("End date (optional, YYYY-MM-DD)")
@@ -922,17 +951,21 @@ impl ExpensesWindow {
             self,
             move |response| {
                 if response == "create" {
-                    let freq = match freq_dropdown.selected() {
-                        0 => "daily",
-                        1 => "weekly",
-                        2 => "monthly",
-                        3 => "yearly",
-                        _ => "monthly",
+                    let freq = if freq_dropdown.selected() == 4 {
+                        format!("{}m", months_spin.value() as u32)
+                    } else {
+                        match freq_dropdown.selected() {
+                            0 => "daily".to_string(),
+                            1 => "weekly".to_string(),
+                            2 => "monthly".to_string(),
+                            3 => "yearly".to_string(),
+                            _ => "monthly".to_string(),
+                        }
                     };
                     let end_text = end_row.text().trim().to_string();
                     let end_date = if end_text.is_empty() { None } else { Some(end_text) };
 
-                    window.make_expense_recurring(expense_id, freq, end_date.as_deref());
+                    window.make_expense_recurring(expense_id, &freq, end_date.as_deref());
                 }
             }
         ));
@@ -986,18 +1019,39 @@ impl ExpensesWindow {
             .spacing(12)
             .build();
 
-        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly"]);
-        let freq_dropdown = gtk::DropDown::builder()
-            .model(&freq_list)
-            .selected(match rec.frequency.as_str() {
+        let (selected_idx, months_value) = if let Some(n_str) = rec.frequency.strip_suffix('m') {
+            (4u32, n_str.parse::<f64>().unwrap_or(3.0))
+        } else {
+            let idx = match rec.frequency.as_str() {
                 "daily" => 0,
                 "weekly" => 1,
                 "monthly" => 2,
                 "yearly" => 3,
                 _ => 2,
-            })
+            };
+            (idx, 3.0)
+        };
+
+        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly", "Every N months"]);
+        let freq_dropdown = gtk::DropDown::builder()
+            .model(&freq_list)
+            .selected(selected_idx)
             .build();
         vbox.append(&freq_dropdown);
+
+        let months_adj = gtk::Adjustment::new(months_value, 2.0, 120.0, 1.0, 1.0, 0.0);
+        let months_spin = gtk::SpinButton::new(Some(&months_adj), 1.0, 0);
+        months_spin.set_sensitive(selected_idx == 4);
+        months_spin.set_tooltip_text(Some("Number of months between occurrences"));
+        vbox.append(&months_spin);
+
+        freq_dropdown.connect_notify_local(Some("selected"), glib::clone!(
+            #[weak]
+            months_spin,
+            move |dropdown, _| {
+                months_spin.set_sensitive(dropdown.selected() == 4);
+            }
+        ));
 
         let end_row = adw::EntryRow::builder()
             .title("End date (optional, YYYY-MM-DD)")
@@ -1013,17 +1067,21 @@ impl ExpensesWindow {
             self,
             move |response| {
                 if response == "save" {
-                    let freq = match freq_dropdown.selected() {
-                        0 => "daily",
-                        1 => "weekly",
-                        2 => "monthly",
-                        3 => "yearly",
-                        _ => "monthly",
+                    let freq = if freq_dropdown.selected() == 4 {
+                        format!("{}m", months_spin.value() as u32)
+                    } else {
+                        match freq_dropdown.selected() {
+                            0 => "daily".to_string(),
+                            1 => "weekly".to_string(),
+                            2 => "monthly".to_string(),
+                            3 => "yearly".to_string(),
+                            _ => "monthly".to_string(),
+                        }
                     };
                     let end_text = end_row.text().trim().to_string();
                     let end_date = if end_text.is_empty() { None } else { Some(end_text.as_str()) };
 
-                    window.db().update_recurring_frequency(&rec_id, freq, end_date).ok();
+                    window.db().update_recurring_frequency(&rec_id, &freq, end_date).ok();
                     window.refresh_expenses();
                 }
             }
