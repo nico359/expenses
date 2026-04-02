@@ -207,9 +207,10 @@ impl ExpensesWindow {
     // --- Export for MyExpenses ---
 
     pub(crate) fn on_export_myexpenses(&self) {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
         let dialog = gtk::FileDialog::builder()
             .title("Export for MyExpenses")
-            .initial_name("myexpenses-backup.zip")
+            .initial_name(format!("myexpenses-export-{}.zip", timestamp))
             .build();
 
         dialog.save(Some(self), None::<&gio::Cancellable>, glib::clone!(
@@ -369,9 +370,10 @@ impl ExpensesWindow {
     // --- Database Export ---
 
     pub(crate) fn on_export_db(&self) {
+        let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S");
         let dialog = gtk::FileDialog::builder()
             .title("Export Database")
-            .initial_name("expenses-backup.db")
+            .initial_name(format!("expenses-backup-{}.db", timestamp))
             .build();
 
         dialog.save(Some(self), None::<&gio::Cancellable>, glib::clone!(
