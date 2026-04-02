@@ -95,11 +95,11 @@ impl ExpensesApplication {
             .application_icon("io.github.nico359.expenses")
             .developer_name("nico359")
             .version(VERSION)
-            .developers(vec!["nico359", "GitHub Copilot CLI (Claude Haiku 4.5, Claude Opus 4.6)"])
+            .developers(vec!["nico359", "GitHub Copilot CLI (Claude)"])
             .translator_credits(&gettext("translator-credits"))
             .copyright("© 2026 nico359")
             .license_type(gtk::License::Gpl30)
-            .comments("A mobile-friendly expense tracker for Linux.\n\nBuilt with the assistance of AI (GitHub Copilot CLI, powered by Claude Haiku 4.5 and Claude Opus 4.6).")
+            .comments("A mobile-friendly expense tracker for Linux.\n\nBuilt with the assistance of AI (GitHub Copilot CLI, powered by Claude).")
             .website("https://github.com/nico359/expenses")
             .issue_url("https://github.com/nico359/expenses/issues")
             .build();
