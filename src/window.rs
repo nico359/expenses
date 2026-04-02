@@ -861,6 +861,24 @@ impl ExpensesWindow {
         let date = chrono::NaiveDate::parse_from_str(&date_str[..10], "%Y-%m-%d")
             .unwrap_or_else(|_| chrono::Local::now().date_naive());
 
+        // Handle "Xd" format (every X days)
+        if let Some(n_str) = frequency.strip_suffix('d') {
+            if let Ok(n) = n_str.parse::<i64>() {
+                return (date + chrono::Duration::days(n))
+                    .format("%Y-%m-%d")
+                    .to_string();
+            }
+        }
+
+        // Handle "Xw" format (every X weeks)
+        if let Some(n_str) = frequency.strip_suffix('w') {
+            if let Ok(n) = n_str.parse::<i64>() {
+                return (date + chrono::Duration::weeks(n))
+                    .format("%Y-%m-%d")
+                    .to_string();
+            }
+        }
+
         // Handle "Xm" format (every X months)
         if let Some(n_str) = frequency.strip_suffix('m') {
             if let Ok(n) = n_str.parse::<u32>() {
@@ -918,24 +936,36 @@ impl ExpensesWindow {
             .spacing(12)
             .build();
 
-        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly", "Every N months"]);
+        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly", "Custom interval"]);
         let freq_dropdown = gtk::DropDown::builder()
             .model(&freq_list)
             .selected(2) // Monthly default
             .build();
         vbox.append(&freq_dropdown);
 
-        let months_adj = gtk::Adjustment::new(3.0, 2.0, 120.0, 1.0, 1.0, 0.0);
-        let months_spin = gtk::SpinButton::new(Some(&months_adj), 1.0, 0);
-        months_spin.set_sensitive(false);
-        months_spin.set_tooltip_text(Some("Number of months between occurrences"));
-        vbox.append(&months_spin);
+        // Custom interval row — only shown when "Custom interval" is selected
+        let custom_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(6)
+            .visible(false)
+            .build();
+        let interval_adj = gtk::Adjustment::new(3.0, 1.0, 365.0, 1.0, 1.0, 0.0);
+        let interval_spin = gtk::SpinButton::new(Some(&interval_adj), 1.0, 0);
+        interval_spin.set_hexpand(true);
+        custom_box.append(&interval_spin);
+        let unit_list = gtk::StringList::new(&["Days", "Weeks", "Months"]);
+        let unit_dropdown = gtk::DropDown::builder()
+            .model(&unit_list)
+            .selected(2) // Months default
+            .build();
+        custom_box.append(&unit_dropdown);
+        vbox.append(&custom_box);
 
         freq_dropdown.connect_notify_local(Some("selected"), glib::clone!(
             #[weak]
-            months_spin,
+            custom_box,
             move |dropdown, _| {
-                months_spin.set_sensitive(dropdown.selected() == 4);
+                custom_box.set_visible(dropdown.selected() == 4);
             }
         ));
 
@@ -952,7 +982,13 @@ impl ExpensesWindow {
             move |response| {
                 if response == "create" {
                     let freq = if freq_dropdown.selected() == 4 {
-                        format!("{}m", months_spin.value() as u32)
+                        let n = interval_spin.value() as u32;
+                        let suffix = match unit_dropdown.selected() {
+                            0 => "d",
+                            1 => "w",
+                            _ => "m",
+                        };
+                        format!("{}{}", n, suffix)
                     } else {
                         match freq_dropdown.selected() {
                             0 => "daily".to_string(),
@@ -1019,8 +1055,12 @@ impl ExpensesWindow {
             .spacing(12)
             .build();
 
-        let (selected_idx, months_value) = if let Some(n_str) = rec.frequency.strip_suffix('m') {
-            (4u32, n_str.parse::<f64>().unwrap_or(3.0))
+        let (selected_idx, custom_value, unit_idx) = if let Some(n_str) = rec.frequency.strip_suffix('d') {
+            (4u32, n_str.parse::<f64>().unwrap_or(1.0), 0u32)
+        } else if let Some(n_str) = rec.frequency.strip_suffix('w') {
+            (4u32, n_str.parse::<f64>().unwrap_or(1.0), 1u32)
+        } else if let Some(n_str) = rec.frequency.strip_suffix('m') {
+            (4u32, n_str.parse::<f64>().unwrap_or(3.0), 2u32)
         } else {
             let idx = match rec.frequency.as_str() {
                 "daily" => 0,
@@ -1029,27 +1069,39 @@ impl ExpensesWindow {
                 "yearly" => 3,
                 _ => 2,
             };
-            (idx, 3.0)
+            (idx, 3.0, 2u32)
         };
 
-        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly", "Every N months"]);
+        let freq_list = gtk::StringList::new(&["Daily", "Weekly", "Monthly", "Yearly", "Custom interval"]);
         let freq_dropdown = gtk::DropDown::builder()
             .model(&freq_list)
             .selected(selected_idx)
             .build();
         vbox.append(&freq_dropdown);
 
-        let months_adj = gtk::Adjustment::new(months_value, 2.0, 120.0, 1.0, 1.0, 0.0);
-        let months_spin = gtk::SpinButton::new(Some(&months_adj), 1.0, 0);
-        months_spin.set_sensitive(selected_idx == 4);
-        months_spin.set_tooltip_text(Some("Number of months between occurrences"));
-        vbox.append(&months_spin);
+        // Custom interval row — only shown when "Custom interval" is selected
+        let custom_box = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(6)
+            .visible(selected_idx == 4)
+            .build();
+        let interval_adj = gtk::Adjustment::new(custom_value, 1.0, 365.0, 1.0, 1.0, 0.0);
+        let interval_spin = gtk::SpinButton::new(Some(&interval_adj), 1.0, 0);
+        interval_spin.set_hexpand(true);
+        custom_box.append(&interval_spin);
+        let unit_list = gtk::StringList::new(&["Days", "Weeks", "Months"]);
+        let unit_dropdown = gtk::DropDown::builder()
+            .model(&unit_list)
+            .selected(unit_idx)
+            .build();
+        custom_box.append(&unit_dropdown);
+        vbox.append(&custom_box);
 
         freq_dropdown.connect_notify_local(Some("selected"), glib::clone!(
             #[weak]
-            months_spin,
+            custom_box,
             move |dropdown, _| {
-                months_spin.set_sensitive(dropdown.selected() == 4);
+                custom_box.set_visible(dropdown.selected() == 4);
             }
         ));
 
@@ -1068,7 +1120,13 @@ impl ExpensesWindow {
             move |response| {
                 if response == "save" {
                     let freq = if freq_dropdown.selected() == 4 {
-                        format!("{}m", months_spin.value() as u32)
+                        let n = interval_spin.value() as u32;
+                        let suffix = match unit_dropdown.selected() {
+                            0 => "d",
+                            1 => "w",
+                            _ => "m",
+                        };
+                        format!("{}{}", n, suffix)
                     } else {
                         match freq_dropdown.selected() {
                             0 => "daily".to_string(),
