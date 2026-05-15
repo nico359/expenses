@@ -104,6 +104,11 @@ impl ExpensesApplication {
             .issue_url("https://github.com/nico359/expenses/issues")
             .build();
 
+        about.add_credit_section(
+            Some(&gettext("Inspired by")),
+            &["MyExpenses by mtotschnig https://github.com/mtotschnig/MyExpenses"],
+        );
+
         about.present(Some(&window));
     }
 }
