@@ -34,9 +34,13 @@ mod imp {
     #[template(resource = "/io/github/nico359/expenses/window.ui")]
     pub struct ExpensesWindow {
         #[template_child]
-        pub account_dropdown: TemplateChild<gtk::DropDown>,
+        pub navigation_split_view: TemplateChild<adw::NavigationSplitView>,
         #[template_child]
-        pub delete_account_button: TemplateChild<gtk::Button>,
+        pub content_page: TemplateChild<adw::NavigationPage>,
+        #[template_child]
+        pub account_list: TemplateChild<gtk::ListBox>,
+        #[template_child]
+        pub add_account_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub amount_entry: TemplateChild<adw::EntryRow>,
         #[template_child]
@@ -65,8 +69,10 @@ mod imp {
     impl Default for ExpensesWindow {
         fn default() -> Self {
             Self {
-                account_dropdown: TemplateChild::default(),
-                delete_account_button: TemplateChild::default(),
+                navigation_split_view: TemplateChild::default(),
+                content_page: TemplateChild::default(),
+                account_list: TemplateChild::default(),
+                add_account_button: TemplateChild::default(),
                 amount_entry: TemplateChild::default(),
                 payee_entry: TemplateChild::default(),
                 note_entry: TemplateChild::default(),
@@ -183,57 +189,117 @@ impl ExpensesWindow {
     // --- Account Management ---
 
     pub(crate) fn setup_accounts(&self) {
-        let accounts = self.db().get_accounts().unwrap_or_default();
-        let mut names: Vec<String> = accounts.iter().map(|a| a.name.clone()).collect();
-        names.push("+ Add Account".to_string());
+        let imp = self.imp();
 
-        let model = gtk::StringList::new(&names.iter().map(|s| s.as_str()).collect::<Vec<_>>());
-        self.imp().account_dropdown.set_model(Some(&model));
+        // Clear existing rows
+        while let Some(child) = imp.account_list.first_child() {
+            imp.account_list.remove(&child);
+        }
+
+        let accounts = self.db().get_accounts().unwrap_or_default();
 
         // Restore last selected account
         let current_name = self.db().get_setting("current_account")
             .unwrap_or_else(|| accounts.first().map(|a| a.name.clone()).unwrap_or_default());
-
         let selected_idx = accounts.iter().position(|a| a.name == current_name).unwrap_or(0);
-        if let Some(account) = accounts.get(selected_idx) {
-            *self.imp().current_account_id.borrow_mut() = account.id;
-            self.imp().account_dropdown.set_selected(selected_idx as u32);
+
+        for (idx, account) in accounts.iter().enumerate() {
+            let balance = self.db().get_balance(account.id).unwrap_or(0.0);
+            let row = self.create_account_row(account, balance);
+            imp.account_list.append(&row);
+
+            if idx == selected_idx {
+                imp.account_list.select_row(Some(&row));
+                *imp.current_account_id.borrow_mut() = account.id;
+            }
         }
 
-        // Connect dropdown changed signal
-        self.imp().account_dropdown.connect_selected_notify(glib::clone!(
+        // Connect row selection
+        imp.account_list.connect_row_selected(glib::clone!(
             #[weak(rename_to = window)]
             self,
-            move |dropdown| {
-                window.on_account_changed(dropdown);
+            move |_, row| {
+                if let Some(row) = row {
+                    let account_id = row.widget_name().parse::<i64>().unwrap_or(0);
+                    if account_id != 0 {
+                        *window.imp().current_account_id.borrow_mut() = account_id;
+                        let accounts = window.db().get_accounts().unwrap_or_default();
+                        if let Some(account) = accounts.iter().find(|a| a.id == account_id) {
+                            window.db().set_setting("current_account", &account.name).ok();
+                            // Update content page title
+                            window.imp().content_page.set_title(&account.name);
+                        }
+                        window.imp().navigation_split_view.set_show_content(true);
+                        window.refresh_expenses();
+                    }
+                }
             }
         ));
 
-        // Connect delete account button
-        self.imp().delete_account_button.connect_clicked(glib::clone!(
+        // Connect add account button
+        imp.add_account_button.connect_clicked(glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |_| {
+                window.show_add_account_dialog();
+            }
+        ));
+
+        // Set initial content page title
+        if let Some(account) = accounts.get(selected_idx) {
+            imp.content_page.set_title(&account.name);
+        }
+    }
+
+    fn create_account_row(&self, account: &crate::db::Account, balance: f64) -> gtk::ListBoxRow {
+        let balance_label = gtk::Label::builder()
+            .label(format!("{:.2} €", balance))
+            .halign(gtk::Align::End)
+            .build();
+        if balance >= 0.0 {
+            balance_label.add_css_class("accent");
+        } else {
+            balance_label.add_css_class("error");
+        }
+
+        let name_label = gtk::Label::builder()
+            .label(&account.name)
+            .halign(gtk::Align::Start)
+            .hexpand(true)
+            .ellipsize(gtk::pango::EllipsizeMode::End)
+            .build();
+
+        let delete_btn = gtk::Button::builder()
+            .icon_name("user-trash-symbolic")
+            .tooltip_text("Delete account")
+            .css_classes(vec!["flat", "circular"])
+            .valign(gtk::Align::Center)
+            .build();
+        delete_btn.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |_| {
                 window.on_delete_account();
             }
         ));
-    }
 
-    fn on_account_changed(&self, dropdown: &gtk::DropDown) {
-        let accounts = self.db().get_accounts().unwrap_or_default();
-        let idx = dropdown.selected() as usize;
+        let hbox = gtk::Box::builder()
+            .orientation(gtk::Orientation::Horizontal)
+            .spacing(6)
+            .margin_start(12)
+            .margin_end(6)
+            .margin_top(10)
+            .margin_bottom(10)
+            .build();
+        hbox.append(&name_label);
+        hbox.append(&balance_label);
+        hbox.append(&delete_btn);
 
-        if idx >= accounts.len() {
-            // "Add Account" selected
-            self.show_add_account_dialog();
-            return;
-        }
-
-        if let Some(account) = accounts.get(idx) {
-            *self.imp().current_account_id.borrow_mut() = account.id;
-            self.db().set_setting("current_account", &account.name).ok();
-            self.refresh_expenses();
-        }
+        let row = gtk::ListBoxRow::builder()
+            .child(&hbox)
+            .build();
+        row.set_widget_name(&account.id.to_string());
+        row
     }
 
     fn show_add_account_dialog(&self) {
@@ -263,15 +329,8 @@ impl ExpensesWindow {
                             window.db().set_setting("current_account", &name).ok();
                             window.setup_accounts();
                             window.refresh_expenses();
-                            return;
                         }
                     }
-                }
-                // Reset dropdown to previous selection
-                let account_id = *window.imp().current_account_id.borrow();
-                let accounts = window.db().get_accounts().unwrap_or_default();
-                if let Some(pos) = accounts.iter().position(|a| a.id == account_id) {
-                    window.imp().account_dropdown.set_selected(pos as u32);
                 }
             }
         ));
@@ -451,6 +510,43 @@ impl ExpensesWindow {
         } else {
             imp.total_label.remove_css_class("accent");
             imp.total_label.add_css_class("error");
+        }
+
+        // Refresh sidebar balance labels
+        let accounts = self.db().get_accounts().unwrap_or_default();
+        let mut row_widget = imp.account_list.first_child();
+        while let Some(widget) = row_widget {
+            if let Some(row) = widget.downcast_ref::<gtk::ListBoxRow>() {
+                let row_account_id = row.widget_name().parse::<i64>().unwrap_or(0);
+                if let Some(account) = accounts.iter().find(|a| a.id == row_account_id) {
+                    let row_balance = self.db().get_balance(account.id).unwrap_or(0.0);
+                    // Find the balance label (second child of the hbox)
+                    if let Some(hbox) = row.child().and_then(|c| c.downcast::<gtk::Box>().ok()) {
+                        let mut hbox_child = hbox.first_child();
+                        let mut child_idx = 0;
+                        while let Some(hbox_widget) = hbox_child {
+                            if child_idx == 1 {
+                                if let Some(label) = hbox_widget.downcast_ref::<gtk::Label>() {
+                                    label.set_label(&format!("{:.2} €", row_balance));
+                                    if row_balance >= 0.0 {
+                                        label.remove_css_class("error");
+                                        label.add_css_class("accent");
+                                    } else {
+                                        label.remove_css_class("accent");
+                                        label.add_css_class("error");
+                                    }
+                                }
+                                break;
+                            }
+                            hbox_child = hbox_widget.next_sibling();
+                            child_idx += 1;
+                        }
+                    }
+                }
+                row_widget = widget.next_sibling();
+            } else {
+                break;
+            }
         }
 
         // Update payees cache
