@@ -439,6 +439,18 @@ impl ExpensesWindow {
     }
 
     fn setup_signals(&self) {
+        // On mobile (collapsed split view), clear the sidebar selection when the user navigates
+        // back so that tapping the same account row again fires row-selected.
+        self.imp().navigation_split_view.connect_notify_local(Some("show-content"), glib::clone!(
+            #[weak(rename_to = window)]
+            self,
+            move |split_view, _| {
+                if split_view.is_collapsed() && !split_view.shows_content() {
+                    window.imp().account_list.unselect_all();
+                }
+            }
+        ));
+
         // Add button
         self.imp().add_button.connect_clicked(glib::clone!(
             #[weak(rename_to = window)]
