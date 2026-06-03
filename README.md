@@ -15,12 +15,32 @@ My motivation behind this one was that I like using the MyExpenses app from Mich
 - Database backup and restore
 - Adaptive UI for mobile and desktop
 
+## Screenshots
+
+![Desktop](data/desktop.png)
+![Account overview](data/account_overview.png)
+![Account page](data/account_page.png)
+![Edit expense](data/edit_expense.png)
+![Add recurring](data/add_recurring.png)
+
 ## Building
 
-The easiest way to build the app from source is by using the GNOME Builder IDE or flatpak-builder.
+The easiest way to build the app is by using GNOME Builder IDE or flatpak-builder.
 
+Example using flatpak-builder as a flatpak:
+-  Install flatpak-builder
 ```
-flatpak-builder --user --install --force-clean build io.github.nico359.expenses.json
+flatpak install org.flatpak.Builder
+```
+
+-  Compile the project into a local repo
+```
+flatpak run org.flatpak.Builder --repo=repo --force-clean --user build io.github.nico359.expenses.json
+```
+
+-  Then create a bundle which you can install
+```
+flatpak build-bundle repo expenses.flatpak io.github.nico359.expenses
 ```
 
 ## License
