@@ -36,7 +36,38 @@
   <launchable type="desktop-id">io.github.nico359.expenses.desktop</launchable>
   <content_rating type="oars-1.1" />
 
+  <screenshots>
+        <screenshot type="default">
+            <caption>Desktop</caption>
+            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/desktop.png</image>
+        </screenshot>
+        <screenshot>
+            <caption>Account overview</caption>
+            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/account_overview.png</image>
+        </screenshot>
+        <screenshot>
+            <caption>Account page</caption>
+            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/account_page.png</image>
+        </screenshot>
+        <screenshot>
+            <caption>Edit expense</caption>
+            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/edit_expense.png</image>
+        </screenshot>
+        <screenshot>
+            <caption>Add recurring</caption>
+            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/add_recurring.png</image>
+        </screenshot>
+  </screenshots>
+
   <releases>
+     <release version="1.3.1" date="2026-06-03">
+      <description translate="no">
+        <p>Small bugfix.</p>
+        <ul>
+          <li>The previously active account does not stay selected anymore which means you can select it again on touch devices</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.3.0" date="2026-05-15">
       <description translate="no">
         <p>This release improves the account navigation experience on desktop.</p>
