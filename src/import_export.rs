@@ -97,7 +97,7 @@ impl ExpensesWindow {
 
         for i in 0..archive.len() {
             let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-            let name = entry.name().to_string();
+            let name = entry.name().map_err(|e| e.to_string())?.to_string();
             if name == "BACKUP" || name.ends_with("/BACKUP") {
                 let tmp_dir = std::env::temp_dir();
                 let tmp_path = tmp_dir.join("expenses-import-BACKUP");
@@ -391,7 +391,7 @@ impl ExpensesWindow {
 
     fn do_export_db(&self, dest_path: &Path) {
         match self.db().connection().backup(
-            rusqlite::DatabaseName::Main,
+            rusqlite::MAIN_DB,
             dest_path,
             None,
         ) {
@@ -445,7 +445,7 @@ impl ExpensesWindow {
         dialog.set_response_appearance("import", adw::ResponseAppearance::Destructive);
 
         let path = path.to_path_buf();
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {
@@ -461,7 +461,7 @@ impl ExpensesWindow {
             Ok(src) => {
                 // Backup source database to the app's database path
                 let db_path = Database::db_path();
-                match src.backup(rusqlite::DatabaseName::Main, &db_path, None) {
+                match src.backup(rusqlite::MAIN_DB, &db_path, None) {
                     Ok(()) => {
                         // Re-initialize database connection
                         self.init_db();

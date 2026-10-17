@@ -129,7 +129,8 @@ mod imp {
 glib::wrapper! {
     pub struct ExpensesWindow(ObjectSubclass<imp::ExpensesWindow>)
         @extends gtk::Widget, gtk::Window, gtk::ApplicationWindow, adw::ApplicationWindow,
-        @implements gio::ActionGroup, gio::ActionMap;
+        @implements gtk::Accessible, gtk::Buildable, gtk::ConstraintTarget, gtk::Native,
+            gtk::Root, gtk::ShortcutManager, gio::ActionGroup, gio::ActionMap;
 }
 
 impl ExpensesWindow {
@@ -317,7 +318,7 @@ impl ExpensesWindow {
             .build();
         dialog.set_extra_child(Some(&entry));
 
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {
@@ -357,7 +358,7 @@ impl ExpensesWindow {
         dialog.add_response("delete", "Delete");
         dialog.set_response_appearance("delete", adw::ResponseAppearance::Destructive);
 
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {
@@ -831,7 +832,7 @@ impl ExpensesWindow {
         let expense_id = expense.id;
         let recurring_id = expense.recurring_id.clone();
 
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {
@@ -1084,7 +1085,7 @@ impl ExpensesWindow {
 
         dialog.set_extra_child(Some(&vbox));
 
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {
@@ -1222,7 +1223,7 @@ impl ExpensesWindow {
         dialog.set_extra_child(Some(&vbox));
 
         let rec_id = recurring_id.to_string();
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {
@@ -1264,7 +1265,7 @@ impl ExpensesWindow {
         dialog.set_response_appearance("stop", adw::ResponseAppearance::Destructive);
 
         let rec_id = recurring_id.to_string();
-        dialog.choose(self, None::<&gio::Cancellable>, glib::clone!(
+        dialog.choose(Some(self), None::<&gio::Cancellable>, glib::clone!(
             #[weak(rename_to = window)]
             self,
             move |response| {

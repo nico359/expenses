@@ -49,4 +49,4 @@ GPL-3.0-or-later
 
 ## AI Disclosure
 
-This application was built with the assistance of AI (GitHub Copilot CLI, Claude Haiku 4.5, Claude Opus 4.6).
+This application was built with the assistance of AI (GitHub Copilot CLI with Claude, and OpenCode with DeepSeek).
