@@ -17,11 +17,13 @@ My motivation behind this one was that I like using the MyExpenses app from Mich
 
 ## Screenshots
 
-![Desktop](data/desktop.png)
-![Account overview](data/account_overview.png)
-![Account page](data/account_page.png)
-![Edit expense](data/edit_expense.png)
-![Add recurring](data/add_recurring.png)
+<div style="display: flex; flex-wrap: wrap; gap: 20px;">
+  <img src="data/desktop.png" width="600" style="flex: 1; min-width: 250px;" />
+  <img src="data/account_overview.png" width="200" style="flex: 1; min-width: 250px;" />
+  <img src="data/account_page.png"  width="200" style="flex: 1; min-width: 250px;" />
+  <img src="data/edit_expense.png"  width="200" style="flex: 1; min-width: 250px;" />
+  <img src="data/add_recurring.png"  width="200" style="flex: 1; min-width: 250px;" />
+</div>
 
 ## Building
 
