@@ -20,11 +20,13 @@
   <url type="vcs-browser">https://github.com/nico359/expenses</url>
   <url type="bugtracker">https://github.com/nico359/expenses/issues</url>
 
+  <categories>
+    <category>Office</category>
+    <category>Finance</category>
+  </categories>
+
   <recommends>
     <display_length compare="ge">360</display_length>
-    <control>touch</control>
-    <control>keyboard</control>
-    <control>pointing</control>
   </recommends>
   <supports>
     <control>touch</control>
@@ -39,23 +41,23 @@
   <screenshots>
         <screenshot type="default">
             <caption>Desktop</caption>
-            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/desktop.png</image>
+            <image>https://raw.githubusercontent.com/nico359/expenses/v1.3.1/data/desktop.png</image>
         </screenshot>
         <screenshot>
             <caption>Account overview</caption>
-            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/account_overview.png</image>
+            <image>https://raw.githubusercontent.com/nico359/expenses/v1.3.1/data/account_overview.png</image>
         </screenshot>
         <screenshot>
             <caption>Account page</caption>
-            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/account_page.png</image>
+            <image>https://raw.githubusercontent.com/nico359/expenses/v1.3.1/data/account_page.png</image>
         </screenshot>
         <screenshot>
             <caption>Edit expense</caption>
-            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/edit_expense.png</image>
+            <image>https://raw.githubusercontent.com/nico359/expenses/v1.3.1/data/edit_expense.png</image>
         </screenshot>
         <screenshot>
             <caption>Add recurring</caption>
-            <image>https://raw.githubusercontent.com/nico359/expenses/refs/heads/main/data/add_recurring.png</image>
+            <image>https://raw.githubusercontent.com/nico359/expenses/v1.3.1/data/add_recurring.png</image>
         </screenshot>
   </screenshots>
 
