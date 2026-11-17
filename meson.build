@@ -1,5 +1,5 @@
 project('expenses', 'rust', 
-          version: '1.3.2',
+          version: '1.3.3',
     meson_version: '>= 1.0.0',
   default_options: [ 'warning_level=2', 'werror=false', ],
 )
