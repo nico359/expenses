@@ -29,6 +29,12 @@ use std::path::Path;
 use crate::db::Database;
 use crate::window::ExpensesWindow;
 
+/// MyExpenses refuses to restore a backup unless this file is present next to
+/// the BACKUP database. It is read for planner/calendar preferences; this
+/// minimal version leaves the calendar unconfigured so MyExpenses creates or
+/// keeps its local one.
+const MYEXPENSES_BACKUP_PREF: &str = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n    <string name=\"home_currency\">EUR</string>\n</map>\n";
+
 impl ExpensesWindow {
     // --- Import from MyExpenses ---
 
@@ -268,6 +274,7 @@ impl ExpensesWindow {
     fn create_myexpenses_backup(&self, backup_path: &Path, schema_sql: &str) -> Result<(), String> {
         let conn = Connection::open(backup_path).map_err(|e| e.to_string())?;
         conn.execute_batch(schema_sql).map_err(|e| e.to_string())?;
+        conn.execute_batch("PRAGMA user_version=191;").map_err(|e| e.to_string())?;
 
         let accounts = self.db().get_accounts().map_err(|e| e.to_string())?;
         let mut account_id_map = std::collections::HashMap::new();
@@ -286,9 +293,9 @@ impl ExpensesWindow {
 
             let uuid = uuid::Uuid::new_v4().to_string();
             conn.execute(
-                "INSERT INTO accounts (label, opening_balance, description, currency, type, color, uuid) \
-                 VALUES (?1, ?2, '', 'EUR', 1, -3355444, ?3)",
-                params![account.name, opening_cents, uuid],
+                "INSERT INTO accounts (label, opening_balance, description, currency, type, color, uuid, sort_key) \
+                 VALUES (?1, ?2, '', 'EUR', 1, -3355444, ?3, ?4)",
+                params![account.name, opening_cents, uuid, (i + 1) as i64],
             ).map_err(|e| e.to_string())?;
         }
 
@@ -323,7 +330,11 @@ impl ExpensesWindow {
             };
 
             let timestamp = Self::date_str_to_timestamp(&expense.date);
-            let payee_id = payee_id_map.get(&expense.payee).copied();
+            let payee_id = if expense.payee.is_empty() {
+                Some(0)
+            } else {
+                payee_id_map.get(&expense.payee).copied()
+            };
             let uuid = uuid::Uuid::new_v4().to_string();
 
             conn.execute(
@@ -351,6 +362,10 @@ impl ExpensesWindow {
         zip.start_file("BACKUP", options).map_err(|e| e.to_string())?;
         let backup_data = std::fs::read(backup_path).map_err(|e| e.to_string())?;
         zip.write_all(&backup_data).map_err(|e| e.to_string())?;
+
+        zip.start_file("BACKUP_PREF", options).map_err(|e| e.to_string())?;
+        zip.write_all(MYEXPENSES_BACKUP_PREF.as_bytes()).map_err(|e| e.to_string())?;
+
         zip.finish().map_err(|e| e.to_string())?;
         Ok(())
     }
